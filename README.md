@@ -6,7 +6,7 @@
 
 | 主界面 | 任务详情 | 移动端 |
 |:---:|:---:|:---:|
-| ![主界面](example_1.png) | ![任务详情](example_2.png) | ![移动端](example_3.png) |
+| ![主界面](docs/images/example_1.png) | ![任务详情](docs/images/example_2.png) | ![移动端](docs/images/example_3.png) |
 
 ## 功能特性
 
@@ -55,7 +55,7 @@
 
 ```bash
 # 构建镜像
-docker build -t gpt-image-playground .
+docker build -f deploy/Dockerfile -t gpt-image-playground .
 
 # 运行容器
 docker run -d -p 8080:80 gpt-image-playground
@@ -68,7 +68,9 @@ docker run -d -p 8080:80 gpt-image-playground
 ```yaml
 services:
   gpt-image-playground:
-    build: .
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
     ports:
       - "8080:80"
     restart: unless-stopped
