@@ -3,6 +3,7 @@ import { useStore, getCachedImage, ensureImageCached, reuseConfig, editOutputs, 
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { formatImageRatio } from '../lib/size'
 import { ActualValueBadge, DetailParamValue } from '../lib/paramDisplay'
+import { copyBlobToClipboard, copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 
 export default function DetailModal() {
   const tasks = useStore((s) => s.tasks)
@@ -158,20 +159,20 @@ export default function DetailModal() {
   const handleCopyError = async () => {
     const errorText = task.error || '生成失败'
     try {
-      await navigator.clipboard.writeText(errorText)
+      await copyTextToClipboard(errorText)
       showToast('完整报错已复制', 'success')
-    } catch {
-      showToast('复制报错失败', 'error')
+    } catch (err) {
+      showToast(getClipboardFailureMessage('复制报错失败', err), 'error')
     }
   }
 
   const handleCopyPrompt = async () => {
     if (!task.prompt) return
     try {
-      await navigator.clipboard.writeText(task.prompt)
+      await copyTextToClipboard(task.prompt)
       showToast('提示词已复制', 'success')
-    } catch {
-      showToast('复制提示词失败', 'error')
+    } catch (err) {
+      showToast(getClipboardFailureMessage('复制提示词失败', err), 'error')
     }
   }
 
@@ -208,13 +209,11 @@ export default function DetailModal() {
     try {
       const res = await fetch(src)
       const blob = await res.blob()
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob }),
-      ])
+      await copyBlobToClipboard(blob)
       showToast('参考图已复制', 'success')
     } catch (err) {
       console.error(err)
-      showToast('复制参考图失败', 'error')
+      showToast(getClipboardFailureMessage('复制参考图失败', err), 'error')
     }
   }
 

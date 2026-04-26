@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useStore } from '../store'
+import { copyBlobToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
 
 export default function ImageContextMenu() {
   const [menuInfo, setMenuInfo] = useState<{ src: string; x: number; y: number } | null>(null)
@@ -7,6 +8,8 @@ export default function ImageContextMenu() {
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (isEmbeddedPage()) return
+
     const onContextMenu = (e: MouseEvent) => {
       const target = e.target as HTMLElement
       if (target && target.tagName === 'IMG') {
@@ -64,13 +67,11 @@ export default function ImageContextMenu() {
     try {
       const res = await fetch(menuInfo.src)
       const blob = await res.blob()
-      await navigator.clipboard.write([
-        new ClipboardItem({ [blob.type]: blob }),
-      ])
+      await copyBlobToClipboard(blob)
       showToast('图片已复制', 'success')
     } catch (err) {
       console.error(err)
-      showToast('复制失败', 'error')
+      showToast(getClipboardFailureMessage('复制失败', err), 'error')
     }
   }
 
@@ -136,4 +137,12 @@ export default function ImageContextMenu() {
       </button>
     </div>
   )
+}
+
+function isEmbeddedPage() {
+  try {
+    return window.self !== window.top
+  } catch {
+    return true
+  }
 }
