@@ -278,7 +278,7 @@ export async function initStore() {
 
 /** 提交新任务 */
 export async function submitTask() {
-  const { settings, prompt, inputImages, params, tasks, setTasks, showToast } =
+  const { settings, prompt, inputImages, params, tasks, setTasks, showToast, setPrompt, clearInputImages } =
     useStore.getState()
 
   if (!settings.apiKey) {
@@ -323,6 +323,8 @@ export async function submitTask() {
   const newTasks = [task, ...tasks]
   setTasks(newTasks)
   await putTask(task)
+  setPrompt('')
+  clearInputImages()
 
   // 异步调用 API
   executeTask(taskId)
