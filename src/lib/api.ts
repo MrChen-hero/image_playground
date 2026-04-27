@@ -61,8 +61,6 @@ async function getApiErrorMessage(response: Response): Promise<string> {
 function createRequestHeaders(settings: AppSettings): Record<string, string> {
   return {
     Authorization: `Bearer ${settings.apiKey}`,
-    'Cache-Control': 'no-store, no-cache, max-age=0',
-    Pragma: 'no-cache',
   }
 }
 
