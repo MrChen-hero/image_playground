@@ -14,6 +14,9 @@ export default function SettingsModal() {
   const importInputRef = useRef<HTMLInputElement>(null)
   const [draft, setDraft] = useState<AppSettings>(settings)
   const [timeoutInput, setTimeoutInput] = useState(String(settings.timeout))
+  const [referenceCompressionTargetInput, setReferenceCompressionTargetInput] = useState(
+    String(settings.referenceCompressionTargetKb ?? DEFAULT_SETTINGS.referenceCompressionTargetKb),
+  )
   const [showApiKey, setShowApiKey] = useState(false)
 
   const getDefaultModelForMode = (apiMode: AppSettings['apiMode']) =>
@@ -23,8 +26,19 @@ export default function SettingsModal() {
     if (showSettings) {
       setDraft(settings)
       setTimeoutInput(String(settings.timeout))
+      setReferenceCompressionTargetInput(
+        String(settings.referenceCompressionTargetKb ?? DEFAULT_SETTINGS.referenceCompressionTargetKb),
+      )
     }
   }, [showSettings, settings])
+
+  const normalizeReferenceCompressionTarget = (value: unknown) => {
+    const numericValue = Number(value)
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      return DEFAULT_SETTINGS.referenceCompressionTargetKb
+    }
+    return Math.round(numericValue)
+  }
 
   const commitSettings = (nextDraft: AppSettings) => {
     const apiMode = nextDraft.apiMode === 'responses' ? 'responses' : DEFAULT_SETTINGS.apiMode
@@ -36,6 +50,8 @@ export default function SettingsModal() {
       apiKey: nextDraft.apiKey,
       model: nextDraft.model.trim() || defaultModel,
       timeout: Number(nextDraft.timeout) || DEFAULT_SETTINGS.timeout,
+      referenceCompressionEnabled: Boolean(nextDraft.referenceCompressionEnabled),
+      referenceCompressionTargetKb: normalizeReferenceCompressionTarget(nextDraft.referenceCompressionTargetKb),
     }
     setDraft(normalizedDraft)
     setSettings(normalizedDraft)
@@ -43,12 +59,17 @@ export default function SettingsModal() {
 
   const handleClose = () => {
     const nextTimeout = Number(timeoutInput)
+    const nextReferenceCompressionTarget = Number(referenceCompressionTargetInput)
     commitSettings({
       ...draft,
       timeout:
         timeoutInput.trim() === '' || Number.isNaN(nextTimeout)
           ? DEFAULT_SETTINGS.timeout
           : nextTimeout,
+      referenceCompressionTargetKb:
+        referenceCompressionTargetInput.trim() === '' || Number.isNaN(nextReferenceCompressionTarget)
+          ? DEFAULT_SETTINGS.referenceCompressionTargetKb
+          : nextReferenceCompressionTarget,
     })
     setShowSettings(false)
   }
@@ -60,6 +81,15 @@ export default function SettingsModal() {
     setTimeoutInput(String(normalizedTimeout))
     commitSettings({ ...draft, timeout: normalizedTimeout })
   }, [draft, timeoutInput])
+
+  const commitReferenceCompressionTarget = useCallback(() => {
+    const normalizedTarget =
+      referenceCompressionTargetInput.trim() === ''
+        ? DEFAULT_SETTINGS.referenceCompressionTargetKb
+        : normalizeReferenceCompressionTarget(referenceCompressionTargetInput)
+    setReferenceCompressionTargetInput(String(normalizedTarget))
+    commitSettings({ ...draft, referenceCompressionTargetKb: normalizedTarget })
+  }, [draft, referenceCompressionTargetInput])
 
   useCloseOnEscape(showSettings, handleClose)
 
@@ -238,6 +268,63 @@ export default function SettingsModal() {
                   max={600}
                   className="w-full rounded-xl border border-gray-200/70 bg-white/60 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-200 dark:focus:border-blue-500/50"
                 />
+              </label>
+            </div>
+          </section>
+
+          <section className="pt-6 border-t border-gray-100 dark:border-white/[0.08]">
+            <h4 className="mb-4 text-sm font-medium text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+              <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4-4a2 2 0 012.8 0l1.2 1.2M14 11l1-1a2 2 0 012.8 0L20 12.2M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              参考图处理
+            </h4>
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-4 rounded-xl border border-gray-200/70 bg-white/45 p-3 dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <div>
+                  <div className="text-sm text-gray-700 dark:text-gray-200">参考图自动压缩</div>
+                  <div className="mt-1 text-[10px] leading-relaxed text-gray-400 dark:text-gray-500">
+                    开启后，上传、粘贴、拖拽和编辑输出加入的参考图会先压缩；历史原图不受影响。
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextDraft = {
+                      ...draft,
+                      referenceCompressionEnabled: !draft.referenceCompressionEnabled,
+                    }
+                    setDraft(nextDraft)
+                    commitSettings(nextDraft)
+                  }}
+                  className={`relative mt-0.5 inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${draft.referenceCompressionEnabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  role="switch"
+                  aria-checked={draft.referenceCompressionEnabled}
+                  aria-label="参考图自动压缩"
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${draft.referenceCompressionEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+
+              <label className="block">
+                <span className="block text-xs text-gray-500 dark:text-gray-400 mb-1">目标大小 (KB)</span>
+                <input
+                  value={referenceCompressionTargetInput}
+                  onChange={(e) => setReferenceCompressionTargetInput(e.target.value)}
+                  onBlur={commitReferenceCompressionTarget}
+                  type="number"
+                  min={100}
+                  max={4096}
+                  disabled={!draft.referenceCompressionEnabled}
+                  className={`w-full rounded-xl border border-gray-200/70 px-3 py-2 text-sm outline-none transition focus:border-blue-300 dark:border-white/[0.08] dark:focus:border-blue-500/50 ${
+                    draft.referenceCompressionEnabled
+                      ? 'bg-white/60 text-gray-700 dark:bg-white/[0.03] dark:text-gray-200'
+                      : 'bg-gray-100/70 text-gray-400 dark:bg-white/[0.04] dark:text-gray-500'
+                  }`}
+                />
+                <div className="mt-1 text-[10px] leading-relaxed text-gray-400 dark:text-gray-500">
+                  建议 600-650 KB。Responses API 使用 base64 JSON，实际请求体会比图片文件更大。
+                </div>
               </label>
             </div>
           </section>

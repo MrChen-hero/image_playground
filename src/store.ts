@@ -23,6 +23,12 @@ import {
 } from './lib/db'
 import { callImageApi } from './lib/api'
 import { normalizeImageSize } from './lib/size'
+import {
+  formatBytes,
+  preprocessReferenceImageDataUrl,
+  preprocessReferenceImageFile,
+  type ReferenceImagePreprocessResult,
+} from './lib/imagePreprocess'
 import { zipSync, unzipSync, strToU8, strFromU8 } from 'fflate'
 
 // ===== Image cache =====
@@ -110,6 +116,13 @@ interface AppState {
   setConfirmDialog: (d: AppState['confirmDialog']) => void
 }
 
+type AddReferenceImageResult = ReferenceImagePreprocessResult & {
+  id: string
+  added: boolean
+}
+
+type PersistedAppState = Partial<Pick<AppState, 'settings' | 'params' | 'dismissedCodexCliPrompts'>>
+
 export const useStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -117,6 +130,7 @@ export const useStore = create<AppState>()(
       settings: { ...DEFAULT_SETTINGS },
       setSettings: (s) => set((st) => ({
         settings: {
+          ...DEFAULT_SETTINGS,
           ...st.settings,
           ...s,
           apiMode:
@@ -124,6 +138,16 @@ export const useStore = create<AppState>()(
               ? s.apiMode
               : st.settings.apiMode ?? DEFAULT_SETTINGS.apiMode,
           codexCli: s.codexCli ?? st.settings.codexCli ?? DEFAULT_SETTINGS.codexCli,
+          referenceCompressionEnabled:
+            s.referenceCompressionEnabled ??
+            st.settings.referenceCompressionEnabled ??
+            DEFAULT_SETTINGS.referenceCompressionEnabled,
+          referenceCompressionTargetKb:
+            normalizeReferenceCompressionTarget(
+              s.referenceCompressionTargetKb ??
+              st.settings.referenceCompressionTargetKb ??
+              DEFAULT_SETTINGS.referenceCompressionTargetKb,
+            ),
         },
       })),
       dismissedCodexCliPrompts: [],
@@ -219,6 +243,24 @@ export const useStore = create<AppState>()(
         params: state.params,
         dismissedCodexCliPrompts: state.dismissedCodexCliPrompts,
       }),
+      merge: (persisted, current) => {
+        const saved = (persisted ?? {}) as PersistedAppState
+        return {
+          ...current,
+          ...saved,
+          settings: {
+            ...DEFAULT_SETTINGS,
+            ...saved.settings,
+            referenceCompressionTargetKb: normalizeReferenceCompressionTarget(
+              saved.settings?.referenceCompressionTargetKb ?? DEFAULT_SETTINGS.referenceCompressionTargetKb,
+            ),
+          },
+          params: {
+            ...DEFAULT_PARAMS,
+            ...saved.params,
+          },
+        }
+      },
     },
   ),
 )
@@ -232,6 +274,14 @@ function genId(): string {
 
 function getCodexCliPromptKey(settings: AppSettings): string {
   return `${settings.baseUrl}\n${settings.apiKey}`
+}
+
+function normalizeReferenceCompressionTarget(value: unknown): number {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return DEFAULT_SETTINGS.referenceCompressionTargetKb
+  }
+  return Math.round(numericValue)
 }
 
 export function showCodexCliPrompt(force = false, reason = '接口返回的提示词已被改写') {
@@ -437,19 +487,40 @@ export async function reuseConfig(task: TaskRecord) {
 
 /** 编辑输出：将输出图加入输入 */
 export async function editOutputs(task: TaskRecord) {
-  const { inputImages, addInputImage, showToast } = useStore.getState()
+  const { settings, inputImages, addInputImage, showToast } = useStore.getState()
   if (!task.outputImages?.length) return
 
   let added = 0
+  let compressed = 0
+  let originalBytes = 0
+  let outputBytes = 0
+  let warning: string | undefined
+  const existingInputIds = new Set(inputImages.map((img) => img.id))
   for (const imgId of task.outputImages) {
-    if (inputImages.find((i) => i.id === imgId)) continue
     const dataUrl = await ensureImageCached(imgId)
     if (dataUrl) {
-      addInputImage({ id: imgId, dataUrl })
+      const processed = await preprocessReferenceImageDataUrl(dataUrl, settings)
+      const id = await hashDataUrl(processed.dataUrl)
+      if (existingInputIds.has(id)) continue
+
+      imageCache.set(id, processed.dataUrl)
+      addInputImage({ id, dataUrl: processed.dataUrl })
+      existingInputIds.add(id)
       added++
+      if (processed.changed) {
+        compressed++
+        originalBytes += processed.originalBytes
+        outputBytes += processed.outputBytes
+      }
+      if (processed.warning) warning = processed.warning
     }
   }
-  showToast(`已添加 ${added} 张输出图到输入`, 'success')
+
+  const compressionText = compressed > 0
+    ? `，已压缩 ${compressed} 张：${formatBytes(originalBytes)} -> ${formatBytes(outputBytes)}`
+    : ''
+  const warningText = warning ? `；${warning}` : ''
+  showToast(`已添加 ${added} 张输出图到输入${compressionText}${warningText}`, warning ? 'error' : 'success')
 }
 
 /** 删除多条任务 */
@@ -672,19 +743,20 @@ export async function importData(file: File) {
 }
 
 /** 添加图片到输入（文件上传）—— 仅放入内存缓存，不写 IndexedDB */
-export async function addImageFromFile(file: File): Promise<void> {
-  if (!file.type.startsWith('image/')) return
-  const dataUrl = await fileToDataUrl(file)
-  const id = await hashDataUrl(dataUrl)
-  imageCache.set(id, dataUrl)
-  useStore.getState().addInputImage({ id, dataUrl })
-}
+export async function addImageFromFile(file: File): Promise<AddReferenceImageResult | undefined> {
+  if (!file.type.startsWith('image/')) return undefined
 
-function fileToDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
+  const settings = useStore.getState().settings
+  const processed = await preprocessReferenceImageFile(file, settings)
+  const id = await hashDataUrl(processed.dataUrl)
+  const added = !useStore.getState().inputImages.find((img) => img.id === id)
+
+  imageCache.set(id, processed.dataUrl)
+  useStore.getState().addInputImage({ id, dataUrl: processed.dataUrl })
+
+  return {
+    ...processed,
+    id,
+    added,
+  }
 }

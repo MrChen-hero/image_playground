@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback, useState, useMemo } from 'react'
 import { useStore, submitTask, addImageFromFile, updateTaskInStore, removeMultipleTasks } from '../store'
 import { DEFAULT_PARAMS } from '../types'
 import { normalizeImageSize } from '../lib/size'
+import { formatBytes } from '../lib/imagePreprocess'
 import Select from './Select'
 import SizePickerModal from './SizePickerModal'
 
@@ -264,9 +265,20 @@ export default function InputBar() {
       const accepted = Array.from(files).filter((f) => f.type.startsWith('image/'))
       const toAdd = accepted.slice(0, remaining)
       const discarded = accepted.length - toAdd.length
+      let compressed = 0
+      let originalBytes = 0
+      let outputBytes = 0
+      let warning: string | undefined
 
       for (const file of toAdd) {
-        await addImageFromFile(file)
+        const result = await addImageFromFile(file)
+        if (!result?.added) continue
+        if (result.changed) {
+          compressed++
+          originalBytes += result.originalBytes
+          outputBytes += result.outputBytes
+        }
+        if (result.warning) warning = result.warning
       }
 
       if (discarded > 0) {
@@ -274,6 +286,15 @@ export default function InputBar() {
           `已达上限 ${API_MAX_IMAGES} 张，${discarded} 张图片被丢弃`,
           'error',
         )
+      }
+      if (compressed > 0) {
+        useStore.getState().showToast(
+          `已压缩 ${compressed} 张参考图：${formatBytes(originalBytes)} -> ${formatBytes(outputBytes)}`,
+          'success',
+        )
+      }
+      if (warning) {
+        useStore.getState().showToast(warning, 'error')
       }
     } catch (err) {
       useStore.getState().showToast(
