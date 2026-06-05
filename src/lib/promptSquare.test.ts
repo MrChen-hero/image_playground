@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createPromptSquareManifest,
   DEFAULT_PROMPT_SQUARE_MEDIA_TYPE,
   normalizePromptSquareDraft,
+  parsePromptSquareManifest,
   parsePromptSquareTags,
   sortPromptSquareItems,
   validatePromptSquareDraft,
@@ -55,5 +57,56 @@ describe('prompt square normalization', () => {
     ] as PromptSquareItem[]
 
     expect(sortPromptSquareItems(items).map((item) => item.id)).toEqual(['a', 'c', 'b'])
+  })
+})
+
+describe('prompt square manifest', () => {
+  it('exports a versioned manifest', () => {
+    const manifest = createPromptSquareManifest([], 123)
+
+    expect(manifest).toEqual({
+      version: 1,
+      exportedAt: 123,
+      items: [],
+      collections: [],
+      defaultCollectionId: null,
+    })
+  })
+
+  it('parses and normalizes valid imported items', () => {
+    const parsed = parsePromptSquareManifest({
+      version: 1,
+      exportedAt: 1,
+      collections: [],
+      defaultCollectionId: null,
+      items: [{
+        id: 'imported',
+        title: ' Imported ',
+        prompt: ' Prompt ',
+        category: '',
+        mediaType: 'functional',
+        tags: ['A', 'A', ' B '],
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+    }, 10)
+
+    expect(parsed.ok).toBe(true)
+    if (parsed.ok) {
+      expect(parsed.items[0]).toMatchObject({
+        id: 'imported',
+        title: 'Imported',
+        prompt: 'Prompt',
+        category: '未分类',
+        mediaType: 'functional',
+        tags: ['A', 'B'],
+        updatedAt: 10,
+      })
+    }
+  })
+
+  it('rejects invalid manifest structure', () => {
+    expect(parsePromptSquareManifest({ version: 2, items: [] }).ok).toBe(false)
+    expect(parsePromptSquareManifest({ version: 1, items: [{ title: '', prompt: '' }] }).ok).toBe(false)
   })
 })
