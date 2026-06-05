@@ -312,10 +312,21 @@ export interface PromptSquareItem {
   mediaType: PromptSquareMediaType
   tags: string[]
   modelHint?: string
+  quality?: TaskParams['quality']
   aspectRatio?: string
+  effectImages?: InputImage[]
+  referenceImages?: InputImage[]
   accentColor?: string
   isFeatured?: boolean
   isFavorite?: boolean
+  favoriteCollectionIds?: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface PromptSquareFavoriteCollection {
+  id: string
+  name: string
   createdAt: number
   updatedAt: number
 }
@@ -324,8 +335,8 @@ export interface PromptSquareManifest {
   version: 1
   exportedAt: number
   items: PromptSquareItem[]
-  collections: []
-  defaultCollectionId: null
+  collections: PromptSquareFavoriteCollection[]
+  defaultCollectionId: string | null
 }
 
 // ===== API 请求体 =====

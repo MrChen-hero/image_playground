@@ -4,6 +4,7 @@ import { ALL_FAVORITES_COLLECTION_ID, deleteFavoriteCollection, getTaskFavoriteC
 import { DEFAULT_PARAMS, type TaskRecord } from '../types'
 import { getActiveApiProfile, normalizeSettings } from '../lib/apiProfiles'
 import { DEFAULT_FAL_IMAGE_SIZE, getChangedParams, getOutputImageLimitForSettings, normalizeParamsForSettings } from '../lib/paramCompatibility'
+import { getQualityOptionsForProvider, MAX_REFERENCE_IMAGES } from '../lib/paramOptions'
 import { getAtImageQuery, getImageMentionLabel, getPromptIndexFromVisibleIndex, getPromptMentionParts, getSelectedImageMentionLabel, getSelectedTextMentionLabel, imageMentionMatches, insertImageMentionAtVisibleRange, insertTextMentionAtVisibleRange, isCursorInSelectedImageMention, stripImageMentionMarkers } from '../lib/promptImageMentions'
 import { normalizeImageSize } from '../lib/size'
 import { formatBytes } from '../lib/imagePreprocess'
@@ -370,7 +371,7 @@ function BatchActionButton({
 }
 
 /** API 支持的最大参考图数量 */
-const API_MAX_IMAGES = 16
+const API_MAX_IMAGES = MAX_REFERENCE_IMAGES
 
 function getFavoriteCollectionTasksForBatch(collectionId: string, tasks: TaskRecord[]) {
   const favoriteTasks = tasks.filter((task) => task.isFavorite)
@@ -803,18 +804,7 @@ export default function InputBar() {
     ? DEFAULT_FAL_IMAGE_SIZE
     : normalizeImageSize(params.size) || DEFAULT_PARAMS.size
 
-  const qualityOptions = isFalProvider
-    ? [
-        { label: 'low', value: 'low' },
-        { label: 'medium', value: 'medium' },
-        { label: 'high', value: 'high' },
-      ]
-    : [
-        { label: 'auto', value: 'auto' },
-        { label: 'low', value: 'low' },
-        { label: 'medium', value: 'medium' },
-        { label: 'high', value: 'high' },
-      ]
+  const qualityOptions = getQualityOptionsForProvider(activeProvider)
   const atImageLimit = inputImages.length >= API_MAX_IMAGES
   const uploadImageTooltipText = atImageLimit ? `参考图数量已达上限（${API_MAX_IMAGES} 张），无法继续添加` : '上传图片'
   const compressionHint = useHintTooltip({ enabled: () => compressionDisabled })

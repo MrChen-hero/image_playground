@@ -1,42 +1,74 @@
-import type { AgentConversation, PromptSquareItem, TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
+import type { AgentConversation, PromptSquareFavoriteCollection, PromptSquareItem, TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
 
 const DB_NAME = 'gpt-image-playground'
-const DB_VERSION = 4
+const DB_VERSION = 5
 const STORE_TASKS = 'tasks'
 const STORE_IMAGES = 'images'
 const STORE_THUMBNAILS = 'thumbnails'
 const STORE_AGENT_CONVERSATIONS = 'agentConversations'
 const STORE_PROMPT_SQUARE_ITEMS = 'promptSquareItems'
+const STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS = 'promptSquareFavoriteCollections'
+const STORE_PROMPT_SQUARE_FAVORITE_META = 'promptSquareFavoriteMeta'
+const PROMPT_SQUARE_DEFAULT_FAVORITE_COLLECTION_META_ID = 'defaultCollectionId'
 const THUMBNAIL_MAX_SIZE = 720
 const THUMBNAIL_QUALITY = 0.9
 const THUMBNAIL_VERSION = 2
+const REQUIRED_OBJECT_STORES = [
+  STORE_TASKS,
+  STORE_IMAGES,
+  STORE_THUMBNAILS,
+  STORE_AGENT_CONVERSATIONS,
+  STORE_PROMPT_SQUARE_ITEMS,
+  STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS,
+  STORE_PROMPT_SQUARE_FAVORITE_META,
+] as const
 
 export const CURRENT_THUMBNAIL_VERSION = THUMBNAIL_VERSION
 
-function openDB(): Promise<IDBDatabase> {
+function createMissingObjectStores(db: IDBDatabase) {
+  for (const storeName of REQUIRED_OBJECT_STORES) {
+    if (!db.objectStoreNames.contains(storeName)) {
+      db.createObjectStore(storeName, { keyPath: 'id' })
+    }
+  }
+}
+
+function hasRequiredObjectStores(db: IDBDatabase) {
+  return REQUIRED_OBJECT_STORES.every((storeName) => db.objectStoreNames.contains(storeName))
+}
+
+function openDBAtVersion(version?: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION)
+    const req = typeof version === 'number' ? indexedDB.open(DB_NAME, version) : indexedDB.open(DB_NAME)
     req.onupgradeneeded = (e) => {
       const db = (e.target as IDBOpenDBRequest).result
-      if (!db.objectStoreNames.contains(STORE_TASKS)) {
-        db.createObjectStore(STORE_TASKS, { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains(STORE_IMAGES)) {
-        db.createObjectStore(STORE_IMAGES, { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains(STORE_THUMBNAILS)) {
-        db.createObjectStore(STORE_THUMBNAILS, { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains(STORE_AGENT_CONVERSATIONS)) {
-        db.createObjectStore(STORE_AGENT_CONVERSATIONS, { keyPath: 'id' })
-      }
-      if (!db.objectStoreNames.contains(STORE_PROMPT_SQUARE_ITEMS)) {
-        db.createObjectStore(STORE_PROMPT_SQUARE_ITEMS, { keyPath: 'id' })
-      }
+      createMissingObjectStores(db)
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
+    req.onblocked = () => reject(new Error('IndexedDB upgrade is blocked by another open connection'))
   })
+}
+
+async function openDB(): Promise<IDBDatabase> {
+  let db: IDBDatabase
+  try {
+    db = await openDBAtVersion(DB_VERSION)
+  } catch (error) {
+    if (!(error instanceof DOMException) || error.name !== 'VersionError') throw error
+    db = await openDBAtVersion()
+  }
+
+  if (hasRequiredObjectStores(db)) return db
+
+  const nextVersion = db.version + 1
+  db.close()
+  const upgradedDb = await openDBAtVersion(nextVersion)
+  if (!hasRequiredObjectStores(upgradedDb)) {
+    upgradedDb.close()
+    throw new Error('IndexedDB schema is missing required object stores')
+  }
+  return upgradedDb
 }
 
 function dbTransaction<T>(
@@ -119,6 +151,69 @@ export function mergePromptSquareItems(items: PromptSquareItem[]): Promise<undef
         tx.onabort = () => reject(tx.error)
       }),
   )
+}
+
+// ===== Prompt Square favorite collections =====
+
+export function getAllPromptSquareFavoriteCollections(): Promise<PromptSquareFavoriteCollection[]> {
+  return dbTransaction(STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS, 'readonly', (s) => s.getAll())
+}
+
+export function putPromptSquareFavoriteCollection(collection: PromptSquareFavoriteCollection): Promise<IDBValidKey> {
+  return dbTransaction(STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS, 'readwrite', (s) => s.put(collection))
+}
+
+export function deletePromptSquareFavoriteCollection(id: string): Promise<undefined> {
+  return dbTransaction(STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS, 'readwrite', (s) => s.delete(id))
+}
+
+export function clearPromptSquareFavoriteCollections(): Promise<undefined> {
+  return dbTransaction(STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS, 'readwrite', (s) => s.clear())
+}
+
+export function replacePromptSquareFavoriteCollections(collections: PromptSquareFavoriteCollection[]): Promise<undefined> {
+  return openDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS, 'readwrite')
+        const store = tx.objectStore(STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS)
+        store.clear()
+        for (const collection of collections) store.put(collection)
+        tx.oncomplete = () => resolve(undefined)
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      }),
+  )
+}
+
+export function mergePromptSquareFavoriteCollections(collections: PromptSquareFavoriteCollection[]): Promise<undefined> {
+  return openDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS, 'readwrite')
+        const store = tx.objectStore(STORE_PROMPT_SQUARE_FAVORITE_COLLECTIONS)
+        for (const collection of collections) store.put(collection)
+        tx.oncomplete = () => resolve(undefined)
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      }),
+  )
+}
+
+export async function getPromptSquareDefaultFavoriteCollectionId(): Promise<string | null> {
+  const record = await dbTransaction<{ id: string; value: string | null } | undefined>(
+    STORE_PROMPT_SQUARE_FAVORITE_META,
+    'readonly',
+    (s) => s.get(PROMPT_SQUARE_DEFAULT_FAVORITE_COLLECTION_META_ID),
+  )
+  return typeof record?.value === 'string' ? record.value : null
+}
+
+export function putPromptSquareDefaultFavoriteCollectionId(defaultCollectionId: string | null): Promise<IDBValidKey> {
+  return dbTransaction(STORE_PROMPT_SQUARE_FAVORITE_META, 'readwrite', (s) => s.put({
+    id: PROMPT_SQUARE_DEFAULT_FAVORITE_COLLECTION_META_ID,
+    value: defaultCollectionId,
+  }))
 }
 
 // ===== Agent conversations =====

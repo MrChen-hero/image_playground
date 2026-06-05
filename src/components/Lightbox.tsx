@@ -144,7 +144,7 @@ export default function Lightbox() {
   if (!lightboxImageId || !src) return null
 
   return (
-    <LightboxInner
+    <ImageLightboxView
       src={src}
       imageId={lightboxImageId}
       maskPreviewSrc={maskPreviewSrc}
@@ -171,7 +171,7 @@ interface LightboxInnerProps {
 }
 
 /** 内部组件：保证挂载时 DOM 已经存在，所有 ref / effect 都可靠 */
-function LightboxInner({ src, imageId, maskPreviewSrc, onClose, showNav, currentIndex, total, onPrev, onNext }: LightboxInnerProps) {
+export function ImageLightboxView({ src, imageId, maskPreviewSrc, onClose, showNav, currentIndex, total, onPrev, onNext }: LightboxInnerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const openedAtRef = useRef(Date.now())
 

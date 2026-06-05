@@ -1,20 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { calculateImageSize, normalizeImageSize, parseRatio, type SizeTier } from '../lib/size'
+import { calculateImageSize, IMAGE_RATIO_OPTIONS, normalizeImageSize, parseRatio, type SizeTier } from '../lib/size'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import ViewportTooltip from './ViewportTooltip'
 
 const TIERS: SizeTier[] = ['1K', '2K', '4K']
 const SIZE_LIMIT_TEXT = '由于模型限制，最终输出会自动规整到合法尺寸：\n宽高均为 16 的倍数，最大边长 3840px，宽高比不超过 3:1，总像素限制为 655360-8294400。'
-const RATIOS = [
-  { label: '1:1', value: '1:1' },
-  { label: '3:2', value: '3:2' },
-  { label: '2:3', value: '2:3' },
-  { label: '16:9', value: '16:9' },
-  { label: '9:16', value: '9:16' },
-  { label: '4:3', value: '4:3' },
-  { label: '3:4', value: '3:4' },
-  { label: '21:9', value: '21:9' },
-]
+const RATIOS = IMAGE_RATIO_OPTIONS
+type RatioChoice = typeof IMAGE_RATIO_OPTIONS[number]['value'] | 'custom'
 
 interface Props {
   currentSize: string
@@ -79,7 +71,7 @@ export default function SizePickerModal({ currentSize, onSelect, onClose, allowA
 
   // Ratio mode state
   const [tier, setTier] = useState<SizeTier>(currentPreset?.tier ?? '1K')
-  const [ratio, setRatio] = useState(currentPreset?.ratio ?? (allowAuto ? '1:1' : '4:3'))
+  const [ratio, setRatio] = useState<RatioChoice>(currentPreset?.ratio ?? (allowAuto ? '1:1' : '4:3'))
   const [customRatio, setCustomRatio] = useState('16:9')
 
   // Resolution mode state

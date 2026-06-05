@@ -1,8 +1,11 @@
-import type { PromptSquareItem, PromptSquareManifest, PromptSquareMediaType } from '../types'
+import { DEFAULT_PARAMS, type InputImage, type PromptSquareFavoriteCollection, type PromptSquareItem, type PromptSquareManifest, type PromptSquareMediaType, type TaskParams } from '../types'
 
 export const PROMPT_SQUARE_MANIFEST_VERSION = 1
 export const DEFAULT_PROMPT_SQUARE_MEDIA_TYPE: PromptSquareMediaType = 'image'
 export const DEFAULT_PROMPT_SQUARE_CATEGORY = '未分类'
+export const ALL_PROMPT_SQUARE_FAVORITES_COLLECTION_ID = '__all_prompt_square_favorites__'
+export const DEFAULT_PROMPT_SQUARE_FAVORITE_COLLECTION_ID = '__default_prompt_square_favorites__'
+export const DEFAULT_PROMPT_SQUARE_FAVORITE_COLLECTION_NAME = '默认'
 
 export const PROMPT_SQUARE_MEDIA_TYPES: Array<{ value: PromptSquareMediaType; label: string }> = [
   { value: 'image', label: '图像' },
@@ -25,10 +28,14 @@ export interface PromptSquareDraft {
   tagsText?: string
   tags?: string[]
   modelHint?: string
+  quality?: TaskParams['quality']
   aspectRatio?: string
+  effectImages?: InputImage[]
+  referenceImages?: InputImage[]
   accentColor?: string
   isFeatured?: boolean
   isFavorite?: boolean
+  favoriteCollectionIds?: string[]
   createdAt?: number
 }
 
@@ -47,12 +54,199 @@ export function validatePromptSquareDraft(draft: Pick<PromptSquareDraft, 'title'
   return errors
 }
 
+function normalizePromptSquareQuality(value: unknown): TaskParams['quality'] {
+  return value === 'auto' || value === 'low' || value === 'medium' || value === 'high'
+    ? value
+    : DEFAULT_PARAMS.quality
+}
+
+function normalizePromptSquareImages(value: unknown): InputImage[] {
+  if (!Array.isArray(value)) return []
+  const seen = new Set<string>()
+  const images: InputImage[] = []
+  for (const item of value) {
+    if (!isRecord(item)) continue
+    const id = typeof item.id === 'string' ? item.id.trim() : ''
+    const dataUrl = typeof item.dataUrl === 'string' ? item.dataUrl.trim() : ''
+    if (!id || !dataUrl.startsWith('data:image/') || seen.has(id)) continue
+    seen.add(id)
+    images.push({ id, dataUrl })
+  }
+  return images
+}
+
+function normalizeFavoriteCollectionName(value: string) {
+  return value.trim().replace(/\s+/g, ' ')
+}
+
+export function createDefaultPromptSquareFavoriteCollection(now = Date.now()): PromptSquareFavoriteCollection {
+  return {
+    id: DEFAULT_PROMPT_SQUARE_FAVORITE_COLLECTION_ID,
+    name: DEFAULT_PROMPT_SQUARE_FAVORITE_COLLECTION_NAME,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+export function normalizePromptSquareFavoriteCollectionIds(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return Array.from(new Set(
+    value
+      .map((id) => typeof id === 'string' ? id.trim() : String(id).trim())
+      .filter((id) => id && id !== ALL_PROMPT_SQUARE_FAVORITES_COLLECTION_ID),
+  ))
+}
+
+export function normalizePromptSquareFavoriteCollections(value: unknown, now = Date.now()): PromptSquareFavoriteCollection[] {
+  const collections = Array.isArray(value) ? value : []
+  const normalized: PromptSquareFavoriteCollection[] = []
+  const ids = new Set<string>()
+
+  for (const item of collections) {
+    if (!isRecord(item)) continue
+    const id = typeof item.id === 'string' ? item.id.trim() : ''
+    const name = normalizeFavoriteCollectionName(typeof item.name === 'string' ? item.name : '')
+    if (!id || id === ALL_PROMPT_SQUARE_FAVORITES_COLLECTION_ID || !name || ids.has(id)) continue
+    ids.add(id)
+    normalized.push({
+      id,
+      name,
+      createdAt: typeof item.createdAt === 'number' ? item.createdAt : now,
+      updatedAt: typeof item.updatedAt === 'number' ? item.updatedAt : now,
+    })
+  }
+
+  return normalized
+}
+
+export function ensurePromptSquareDefaultFavoriteCollection(
+  collections: PromptSquareFavoriteCollection[],
+  now = Date.now(),
+) {
+  if (collections.some((collection) => collection.id === DEFAULT_PROMPT_SQUARE_FAVORITE_COLLECTION_ID)) {
+    return collections
+  }
+  return [createDefaultPromptSquareFavoriteCollection(now), ...collections]
+}
+
+export function resolvePromptSquareDefaultFavoriteCollectionId(
+  collections: PromptSquareFavoriteCollection[],
+  preferredId: unknown,
+) {
+  if (typeof preferredId === 'string' && collections.some((collection) => collection.id === preferredId)) return preferredId
+  if (collections.some((collection) => collection.id === DEFAULT_PROMPT_SQUARE_FAVORITE_COLLECTION_ID)) {
+    return DEFAULT_PROMPT_SQUARE_FAVORITE_COLLECTION_ID
+  }
+  return collections[0]?.id ?? null
+}
+
+export function normalizePromptSquareFavoriteState(
+  items: PromptSquareItem[],
+  collections: PromptSquareFavoriteCollection[],
+  preferredDefaultCollectionId: string | null,
+  now = Date.now(),
+) {
+  const normalizedCollections = ensurePromptSquareDefaultFavoriteCollection(
+    normalizePromptSquareFavoriteCollections(collections, now),
+    now,
+  )
+  const collectionIdSet = new Set(normalizedCollections.map((collection) => collection.id))
+  const defaultCollectionId = resolvePromptSquareDefaultFavoriteCollectionId(normalizedCollections, preferredDefaultCollectionId)
+  const normalizedItems = items.map((item) => normalizePromptSquareItemFavoriteState(item, collectionIdSet, defaultCollectionId))
+  return {
+    items: normalizedItems,
+    collections: normalizedCollections,
+    defaultCollectionId,
+  }
+}
+
+export function normalizePromptSquareItemFavoriteState(
+  item: PromptSquareItem,
+  validCollectionIds: Set<string>,
+  defaultCollectionId: string | null,
+): PromptSquareItem {
+  const filteredIds = normalizePromptSquareFavoriteCollectionIds(item.favoriteCollectionIds)
+    .filter((id) => validCollectionIds.has(id))
+  const ids = filteredIds.length ? filteredIds : item.isFavorite && defaultCollectionId ? [defaultCollectionId] : []
+  return {
+    ...item,
+    favoriteCollectionIds: ids,
+    isFavorite: ids.length > 0,
+  }
+}
+
+export function createPromptSquareFavoriteCollection(
+  collections: PromptSquareFavoriteCollection[],
+  name: string,
+  now = Date.now(),
+) {
+  const normalizedName = normalizeFavoriteCollectionName(name)
+  if (!normalizedName) return null
+  const existing = collections.find((collection) => collection.name === normalizedName)
+  if (existing) return existing
+  return {
+    id: `prompt-square-favorite-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    name: normalizedName,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
+export function renamePromptSquareFavoriteCollection(
+  collections: PromptSquareFavoriteCollection[],
+  collectionId: string,
+  name: string,
+  now = Date.now(),
+) {
+  const normalizedName = normalizeFavoriteCollectionName(name)
+  if (!normalizedName || collectionId === ALL_PROMPT_SQUARE_FAVORITES_COLLECTION_ID) return collections
+  return collections.map((collection) => (
+    collection.id === collectionId ? { ...collection, name: normalizedName, updatedAt: now } : collection
+  ))
+}
+
+export function removePromptSquareFavoriteCollection(
+  items: PromptSquareItem[],
+  collections: PromptSquareFavoriteCollection[],
+  defaultCollectionId: string | null,
+  collectionId: string,
+) {
+  if (!collectionId || collectionId === ALL_PROMPT_SQUARE_FAVORITES_COLLECTION_ID || collections.length <= 1) {
+    return { items, collections, defaultCollectionId }
+  }
+  const nextCollections = collections.filter((collection) => collection.id !== collectionId)
+  if (nextCollections.length === collections.length || nextCollections.length < 1) {
+    return { items, collections, defaultCollectionId }
+  }
+  const validCollectionIds = new Set(nextCollections.map((collection) => collection.id))
+  const nextDefaultCollectionId = resolvePromptSquareDefaultFavoriteCollectionId(nextCollections, defaultCollectionId === collectionId ? null : defaultCollectionId)
+  return {
+    collections: nextCollections,
+    defaultCollectionId: nextDefaultCollectionId,
+    items: items.map((item) => normalizePromptSquareItemFavoriteState({
+      ...item,
+      favoriteCollectionIds: normalizePromptSquareFavoriteCollectionIds(item.favoriteCollectionIds).filter((id) => id !== collectionId),
+      isFavorite: item.isFavorite,
+    }, validCollectionIds, null)),
+  }
+}
+
+export function getPromptSquareItemFavoriteCollectionIds(item: PromptSquareItem) {
+  return normalizePromptSquareFavoriteCollectionIds(item.favoriteCollectionIds)
+}
+
+export function getPromptSquareFavoriteCollectionTitle(collectionId: string | null, collections: PromptSquareFavoriteCollection[]) {
+  if (collectionId === ALL_PROMPT_SQUARE_FAVORITES_COLLECTION_ID) return '全部'
+  return collections.find((collection) => collection.id === collectionId)?.name ?? DEFAULT_PROMPT_SQUARE_FAVORITE_COLLECTION_NAME
+}
+
 export function normalizePromptSquareDraft(draft: PromptSquareDraft, now = Date.now()): PromptSquareItem {
   const mediaType = draft.mediaType && DEFAULT_ACCENT_COLORS[draft.mediaType]
     ? draft.mediaType
     : DEFAULT_PROMPT_SQUARE_MEDIA_TYPE
   const createdAt = draft.createdAt ?? now
   const tags = draft.tags ?? parsePromptSquareTags(draft.tagsText ?? '')
+  const favoriteCollectionIds = normalizePromptSquareFavoriteCollectionIds(draft.favoriteCollectionIds)
 
   return {
     id: draft.id || `prompt-square-${now}-${Math.random().toString(36).slice(2, 8)}`,
@@ -62,10 +256,14 @@ export function normalizePromptSquareDraft(draft: PromptSquareDraft, now = Date.
     mediaType,
     tags,
     modelHint: draft.modelHint?.trim() || undefined,
+    quality: normalizePromptSquareQuality(draft.quality),
     aspectRatio: draft.aspectRatio?.trim() || undefined,
+    effectImages: normalizePromptSquareImages(draft.effectImages),
+    referenceImages: normalizePromptSquareImages(draft.referenceImages),
     accentColor: draft.accentColor?.trim() || DEFAULT_ACCENT_COLORS[mediaType],
     isFeatured: Boolean(draft.isFeatured),
-    isFavorite: Boolean(draft.isFavorite),
+    favoriteCollectionIds,
+    isFavorite: favoriteCollectionIds.length > 0 || Boolean(draft.isFavorite),
     createdAt,
     updatedAt: now,
   }
@@ -80,10 +278,14 @@ export function promptSquareItemToDraft(item: PromptSquareItem): PromptSquareDra
     mediaType: item.mediaType,
     tagsText: item.tags.join(', '),
     modelHint: item.modelHint ?? '',
+    quality: item.quality ?? DEFAULT_PARAMS.quality,
     aspectRatio: item.aspectRatio ?? '',
+    effectImages: item.effectImages?.map((image) => ({ ...image })) ?? [],
+    referenceImages: item.referenceImages?.map((image) => ({ ...image })) ?? [],
     accentColor: item.accentColor ?? '',
     isFeatured: Boolean(item.isFeatured),
     isFavorite: Boolean(item.isFavorite),
+    favoriteCollectionIds: getPromptSquareItemFavoriteCollectionIds(item),
     createdAt: item.createdAt,
   }
 }
@@ -95,13 +297,21 @@ export function sortPromptSquareItems(items: PromptSquareItem[]) {
   })
 }
 
-export function createPromptSquareManifest(items: PromptSquareItem[], exportedAt = Date.now()): PromptSquareManifest {
+export function createPromptSquareManifest(
+  items: PromptSquareItem[],
+  collectionsOrExportedAt: PromptSquareFavoriteCollection[] | number = [],
+  defaultCollectionId: string | null = null,
+  exportedAt = Date.now(),
+): PromptSquareManifest {
+  const collections = typeof collectionsOrExportedAt === 'number' ? [] : collectionsOrExportedAt
+  const resolvedExportedAt = typeof collectionsOrExportedAt === 'number' ? collectionsOrExportedAt : exportedAt
+  const normalized = normalizePromptSquareFavoriteState(items, collections, defaultCollectionId, resolvedExportedAt)
   return {
     version: PROMPT_SQUARE_MANIFEST_VERSION,
-    exportedAt,
-    items: sortPromptSquareItems(items),
-    collections: [],
-    defaultCollectionId: null,
+    exportedAt: resolvedExportedAt,
+    items: sortPromptSquareItems(normalized.items),
+    collections: normalized.collections,
+    defaultCollectionId: normalized.defaultCollectionId,
   }
 }
 
@@ -128,10 +338,14 @@ function normalizeImportedPromptSquareItem(value: unknown, now = Date.now()): Pr
     mediaType,
     tags,
     modelHint: typeof value.modelHint === 'string' ? value.modelHint : '',
+    quality: normalizePromptSquareQuality(value.quality),
     aspectRatio: typeof value.aspectRatio === 'string' ? value.aspectRatio : '',
+    effectImages: normalizePromptSquareImages(value.effectImages),
+    referenceImages: normalizePromptSquareImages(value.referenceImages),
     accentColor: typeof value.accentColor === 'string' ? value.accentColor : '',
     isFeatured: Boolean(value.isFeatured),
     isFavorite: Boolean(value.isFavorite),
+    favoriteCollectionIds: normalizePromptSquareFavoriteCollectionIds(value.favoriteCollectionIds),
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : now,
   }, now)
 
@@ -139,7 +353,7 @@ function normalizeImportedPromptSquareItem(value: unknown, now = Date.now()): Pr
 }
 
 export type ParsePromptSquareManifestResult =
-  | { ok: true; items: PromptSquareItem[] }
+  | { ok: true; items: PromptSquareItem[]; collections: PromptSquareFavoriteCollection[]; defaultCollectionId: string | null }
   | { ok: false; error: string }
 
 export function parsePromptSquareManifest(value: unknown, now = Date.now()): ParsePromptSquareManifestResult {
@@ -149,5 +363,16 @@ export function parsePromptSquareManifest(value: unknown, now = Date.now()): Par
 
   const items = value.items.map((item) => normalizeImportedPromptSquareItem(item, now))
   if (items.some((item) => !item)) return { ok: false, error: '导入文件包含无效提示词' }
-  return { ok: true, items: items as PromptSquareItem[] }
+
+  const collections = ensurePromptSquareDefaultFavoriteCollection(
+    normalizePromptSquareFavoriteCollections(value.collections, now),
+    now,
+  )
+  const normalized = normalizePromptSquareFavoriteState(
+    items as PromptSquareItem[],
+    collections,
+    typeof value.defaultCollectionId === 'string' ? value.defaultCollectionId : null,
+    now,
+  )
+  return { ok: true, ...normalized }
 }
