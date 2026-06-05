@@ -1347,24 +1347,6 @@ function PromptSquareEditModal({
                     />
                   </label>
 
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">强调色</span>
-                    <div className="flex gap-2">
-                      <input
-                        value={draft.accentColor ?? ''}
-                        onChange={(event) => updateDraft({ accentColor: event.target.value })}
-                        placeholder="#2563eb"
-                        className="min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white px-3.5 py-3 text-sm text-gray-900 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
-                      />
-                      <input
-                        type="color"
-                        value={draft.accentColor || '#2563eb'}
-                        onChange={(event) => updateDraft({ accentColor: event.target.value })}
-                        className="h-11 w-11 shrink-0 rounded-2xl border border-gray-200 bg-white p-1 dark:border-white/[0.08] dark:bg-gray-950"
-                        aria-label="选择强调色"
-                      />
-                    </div>
-                  </label>
                 </div>
 
                 <label className="flex items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm text-gray-600 dark:border-white/[0.08] dark:bg-black/10 dark:text-gray-300">
