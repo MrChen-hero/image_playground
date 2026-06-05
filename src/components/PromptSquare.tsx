@@ -45,11 +45,19 @@ type MediaFilter = PromptSquareMediaType
 const ALL_CATEGORIES = 'all'
 const DEFAULT_MEDIA_FILTER: MediaFilter = 'image'
 const MEDIA_FILTERS: Array<{ value: MediaFilter; label: string }> = PROMPT_SQUARE_MEDIA_TYPES
-const DEFAULT_PROMPT_SQUARE_RATIO = '1:1'
-const RATIO_OPTIONS = IMAGE_RATIO_OPTIONS
+const DEFAULT_PROMPT_SQUARE_RATIO = 'auto'
+const RATIO_OPTIONS: Array<{ label: string; value: string }> = [
+  { label: 'auto', value: 'auto' },
+  ...IMAGE_RATIO_OPTIONS,
+]
 const REFERENCE_IMAGE_LIMIT = MAX_REFERENCE_IMAGES
 const EFFECT_IMAGE_LIMIT = MAX_REFERENCE_IMAGES
 const MEDIA_FILTER_WIDTH_REM = 4.75
+const PROMPT_VISUAL_ACCENTS: Record<PromptSquareMediaType, string> = {
+  image: '#2563eb',
+  video: '#334155',
+  functional: '#4f46e5',
+}
 
 function getSearchText(item: PromptSquareItem) {
   return [item.title, item.prompt, item.category, ...item.tags].join('\n').toLowerCase()
@@ -80,6 +88,7 @@ function getSelectableQualityValue(
 }
 
 function getPromptSquareSizeForRatio(ratio?: string) {
+  if (ratio === 'auto') return 'auto'
   return ratio ? calculateImageSize('1K', ratio) : null
 }
 
@@ -234,7 +243,7 @@ function PromptVisual({
   onActiveIndexChange?: (index: number) => void
   onOpenImage?: (images: InputImage[], index: number) => void
 }) {
-  const accent = item.accentColor ?? '#3b82f6'
+  const accent = PROMPT_VISUAL_ACCENTS[item.mediaType] ?? PROMPT_VISUAL_ACCENTS.image
   const effectImages = item.effectImages ?? []
   const imageCount = effectImages.length
   const currentIndex = imageCount ? Math.min(Math.max(activeIndex, 0), imageCount - 1) : 0
@@ -1622,7 +1631,6 @@ export default function PromptSquare() {
       aspectRatio: DEFAULT_PROMPT_SQUARE_RATIO,
       effectImages: [],
       referenceImages: [],
-      accentColor: '',
       isFeatured: false,
     })
   }

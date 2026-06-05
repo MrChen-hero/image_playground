@@ -316,7 +316,6 @@ export interface PromptSquareItem {
   aspectRatio?: string
   effectImages?: InputImage[]
   referenceImages?: InputImage[]
-  accentColor?: string
   isFeatured?: boolean
   isFavorite?: boolean
   favoriteCollectionIds?: string[]

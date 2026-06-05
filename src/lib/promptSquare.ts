@@ -13,11 +13,7 @@ export const PROMPT_SQUARE_MEDIA_TYPES: Array<{ value: PromptSquareMediaType; la
   { value: 'functional', label: '功能' },
 ]
 
-const DEFAULT_ACCENT_COLORS: Record<PromptSquareMediaType, string> = {
-  image: '#2563eb',
-  video: '#334155',
-  functional: '#4f46e5',
-}
+const PROMPT_SQUARE_MEDIA_TYPE_VALUES = new Set<PromptSquareMediaType>(PROMPT_SQUARE_MEDIA_TYPES.map((item) => item.value))
 
 export interface PromptSquareDraft {
   id?: string
@@ -32,7 +28,6 @@ export interface PromptSquareDraft {
   aspectRatio?: string
   effectImages?: InputImage[]
   referenceImages?: InputImage[]
-  accentColor?: string
   isFeatured?: boolean
   isFavorite?: boolean
   favoriteCollectionIds?: string[]
@@ -50,7 +45,7 @@ export function validatePromptSquareDraft(draft: Pick<PromptSquareDraft, 'title'
   const errors: string[] = []
   if (!draft.title?.trim()) errors.push('标题不能为空')
   if (!draft.prompt?.trim()) errors.push('提示词不能为空')
-  if (!draft.mediaType || !DEFAULT_ACCENT_COLORS[draft.mediaType]) errors.push('类型无效')
+  if (!draft.mediaType || !PROMPT_SQUARE_MEDIA_TYPE_VALUES.has(draft.mediaType)) errors.push('类型无效')
   return errors
 }
 
@@ -165,11 +160,12 @@ export function normalizePromptSquareItemFavoriteState(
   validCollectionIds: Set<string>,
   defaultCollectionId: string | null,
 ): PromptSquareItem {
+  const { accentColor: _accentColor, ...itemWithoutAccentColor } = item as PromptSquareItem & { accentColor?: unknown }
   const filteredIds = normalizePromptSquareFavoriteCollectionIds(item.favoriteCollectionIds)
     .filter((id) => validCollectionIds.has(id))
   const ids = filteredIds.length ? filteredIds : item.isFavorite && defaultCollectionId ? [defaultCollectionId] : []
   return {
-    ...item,
+    ...itemWithoutAccentColor,
     favoriteCollectionIds: ids,
     isFavorite: ids.length > 0,
   }
@@ -241,7 +237,7 @@ export function getPromptSquareFavoriteCollectionTitle(collectionId: string | nu
 }
 
 export function normalizePromptSquareDraft(draft: PromptSquareDraft, now = Date.now()): PromptSquareItem {
-  const mediaType = draft.mediaType && DEFAULT_ACCENT_COLORS[draft.mediaType]
+  const mediaType = draft.mediaType && PROMPT_SQUARE_MEDIA_TYPE_VALUES.has(draft.mediaType)
     ? draft.mediaType
     : DEFAULT_PROMPT_SQUARE_MEDIA_TYPE
   const createdAt = draft.createdAt ?? now
@@ -260,7 +256,6 @@ export function normalizePromptSquareDraft(draft: PromptSquareDraft, now = Date.
     aspectRatio: draft.aspectRatio?.trim() || undefined,
     effectImages: normalizePromptSquareImages(draft.effectImages),
     referenceImages: normalizePromptSquareImages(draft.referenceImages),
-    accentColor: draft.accentColor?.trim() || DEFAULT_ACCENT_COLORS[mediaType],
     isFeatured: Boolean(draft.isFeatured),
     favoriteCollectionIds,
     isFavorite: favoriteCollectionIds.length > 0 || Boolean(draft.isFavorite),
@@ -282,7 +277,6 @@ export function promptSquareItemToDraft(item: PromptSquareItem): PromptSquareDra
     aspectRatio: item.aspectRatio ?? '',
     effectImages: item.effectImages?.map((image) => ({ ...image })) ?? [],
     referenceImages: item.referenceImages?.map((image) => ({ ...image })) ?? [],
-    accentColor: item.accentColor ?? '',
     isFeatured: Boolean(item.isFeatured),
     isFavorite: Boolean(item.isFavorite),
     favoriteCollectionIds: getPromptSquareItemFavoriteCollectionIds(item),
@@ -342,7 +336,6 @@ function normalizeImportedPromptSquareItem(value: unknown, now = Date.now()): Pr
     aspectRatio: typeof value.aspectRatio === 'string' ? value.aspectRatio : '',
     effectImages: normalizePromptSquareImages(value.effectImages),
     referenceImages: normalizePromptSquareImages(value.referenceImages),
-    accentColor: typeof value.accentColor === 'string' ? value.accentColor : '',
     isFeatured: Boolean(value.isFeatured),
     isFavorite: Boolean(value.isFavorite),
     favoriteCollectionIds: normalizePromptSquareFavoriteCollectionIds(value.favoriteCollectionIds),

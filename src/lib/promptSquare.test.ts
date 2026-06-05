@@ -19,7 +19,7 @@ describe('prompt square normalization', () => {
     expect(parsePromptSquareTags('商业, 棚拍，极简\n产品')).toEqual(['商业', '棚拍', '极简', '产品'])
   })
 
-  it('defaults empty category and accent color', () => {
+  it('defaults empty category', () => {
     const normalized = normalizePromptSquareDraft({
       title: '  标题  ',
       prompt: '  prompt  ',
@@ -31,7 +31,6 @@ describe('prompt square normalization', () => {
       aspectRatio: '',
       effectImages: [],
       referenceImages: [],
-      accentColor: '',
       isFeatured: false,
     }, 100)
 
@@ -44,7 +43,6 @@ describe('prompt square normalization', () => {
       quality: 'auto',
       effectImages: [],
       referenceImages: [],
-      accentColor: '#2563eb',
       isFeatured: false,
       createdAt: 100,
       updatedAt: 100,
