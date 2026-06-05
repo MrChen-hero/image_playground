@@ -5,10 +5,13 @@ import { copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboar
 import {
   deletePromptSquareItem,
   getAllPromptSquareItems,
+  mergePromptSquareItems,
   putPromptSquareItem,
 } from '../lib/db'
 import {
+  createPromptSquareManifest,
   normalizePromptSquareDraft,
+  parsePromptSquareManifest,
   PROMPT_SQUARE_MEDIA_TYPES,
   promptSquareItemToDraft,
   sortPromptSquareItems,
@@ -17,7 +20,7 @@ import {
 } from '../lib/promptSquare'
 import { useStore } from '../store'
 import type { PromptSquareItem, PromptSquareMediaType } from '../types'
-import { CloseIcon, CodeIcon, CopyIcon, EditIcon, FavoriteIcon, PhotoIcon, PlusIcon, TrashIcon, WrenchIcon } from './icons'
+import { CloseIcon, CodeIcon, CopyIcon, EditIcon, ExportIcon, FavoriteIcon, ImportIcon, PhotoIcon, PlusIcon, TrashIcon, WrenchIcon } from './icons'
 import Select from './Select'
 
 type MediaFilter = PromptSquareMediaType
@@ -547,6 +550,7 @@ export default function PromptSquare() {
   const [loading, setLoading] = useState(true)
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [draft, setDraft] = useState<PromptSquareDraft | null>(null)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   const reloadItems = useCallback(async () => {
     setLoading(true)
@@ -661,6 +665,38 @@ export default function PromptSquare() {
     })
   }
 
+  const exportLibrary = () => {
+    const manifest = createPromptSquareManifest(items)
+    const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `prompt-square-${new Date(manifest.exportedAt).toISOString().slice(0, 10)}.json`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    showToast('提示词库已导出', 'success')
+  }
+
+  const importLibraryFile = async (file: File | null) => {
+    if (!file) return
+    try {
+      const parsed = parsePromptSquareManifest(JSON.parse(await file.text()))
+      if (!parsed.ok) {
+        showToast(parsed.error, 'error')
+        return
+      }
+      await mergePromptSquareItems(parsed.items)
+      await reloadItems()
+      showToast(`已导入 ${parsed.items.length} 个提示词`, 'success')
+    } catch {
+      showToast('导入提示词库失败', 'error')
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = ''
+    }
+  }
+
   const copyPrompt = async (item: PromptSquareItem) => {
     try {
       await copyTextToClipboard(item.prompt)
@@ -691,6 +727,31 @@ export default function PromptSquare() {
             >
               <FavoriteIcon filled={favoriteOnly} className="h-5 w-5" />
             </button>
+            <button
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+              className="rounded-xl border border-gray-200 bg-white p-2.5 text-gray-400 transition-all hover:bg-gray-50 hover:text-gray-700 dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
+              title="导入提示词库"
+              aria-label="导入提示词库"
+            >
+              <ImportIcon className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              onClick={exportLibrary}
+              className="rounded-xl border border-gray-200 bg-white p-2.5 text-gray-400 transition-all hover:bg-gray-50 hover:text-gray-700 dark:border-white/[0.08] dark:bg-gray-900 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
+              title="导出提示词库"
+              aria-label="导出提示词库"
+            >
+              <ExportIcon className="h-5 w-5" />
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => void importLibraryFile(event.target.files?.[0] ?? null)}
+            />
             <div className="relative w-28 sm:w-32">
               <Select
                 value={category}
