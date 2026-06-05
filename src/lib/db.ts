@@ -1,11 +1,12 @@
-import type { AgentConversation, TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
+import type { AgentConversation, PromptSquareItem, TaskRecord, StoredImage, StoredImageThumbnail } from '../types'
 
 const DB_NAME = 'gpt-image-playground'
-const DB_VERSION = 3
+const DB_VERSION = 4
 const STORE_TASKS = 'tasks'
 const STORE_IMAGES = 'images'
 const STORE_THUMBNAILS = 'thumbnails'
 const STORE_AGENT_CONVERSATIONS = 'agentConversations'
+const STORE_PROMPT_SQUARE_ITEMS = 'promptSquareItems'
 const THUMBNAIL_MAX_SIZE = 720
 const THUMBNAIL_QUALITY = 0.9
 const THUMBNAIL_VERSION = 2
@@ -28,6 +29,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_AGENT_CONVERSATIONS)) {
         db.createObjectStore(STORE_AGENT_CONVERSATIONS, { keyPath: 'id' })
+      }
+      if (!db.objectStoreNames.contains(STORE_PROMPT_SQUARE_ITEMS)) {
+        db.createObjectStore(STORE_PROMPT_SQUARE_ITEMS, { keyPath: 'id' })
       }
     }
     req.onsuccess = () => resolve(req.result)
@@ -68,6 +72,53 @@ export function deleteTask(id: string): Promise<undefined> {
 
 export function clearTasks(): Promise<undefined> {
   return dbTransaction(STORE_TASKS, 'readwrite', (s) => s.clear())
+}
+
+// ===== Prompt Square items =====
+
+export function getAllPromptSquareItems(): Promise<PromptSquareItem[]> {
+  return dbTransaction(STORE_PROMPT_SQUARE_ITEMS, 'readonly', (s) => s.getAll())
+}
+
+export function putPromptSquareItem(item: PromptSquareItem): Promise<IDBValidKey> {
+  return dbTransaction(STORE_PROMPT_SQUARE_ITEMS, 'readwrite', (s) => s.put(item))
+}
+
+export function deletePromptSquareItem(id: string): Promise<undefined> {
+  return dbTransaction(STORE_PROMPT_SQUARE_ITEMS, 'readwrite', (s) => s.delete(id))
+}
+
+export function clearPromptSquareItems(): Promise<undefined> {
+  return dbTransaction(STORE_PROMPT_SQUARE_ITEMS, 'readwrite', (s) => s.clear())
+}
+
+export function replacePromptSquareItems(items: PromptSquareItem[]): Promise<undefined> {
+  return openDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PROMPT_SQUARE_ITEMS, 'readwrite')
+        const store = tx.objectStore(STORE_PROMPT_SQUARE_ITEMS)
+        store.clear()
+        for (const item of items) store.put(item)
+        tx.oncomplete = () => resolve(undefined)
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      }),
+  )
+}
+
+export function mergePromptSquareItems(items: PromptSquareItem[]): Promise<undefined> {
+  return openDB().then(
+    (db) =>
+      new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_PROMPT_SQUARE_ITEMS, 'readwrite')
+        const store = tx.objectStore(STORE_PROMPT_SQUARE_ITEMS)
+        for (const item of items) store.put(item)
+        tx.oncomplete = () => resolve(undefined)
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      }),
+  )
 }
 
 // ===== Agent conversations =====
