@@ -141,7 +141,7 @@ function PromptSquareImageUploadSection({
 
   return (
     <section className="rounded-2xl border border-gray-200/70 bg-white/70 p-3 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03]">
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="mb-3 flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="block text-sm font-semibold text-gray-800 dark:text-gray-100">{title}</span>
           <span className="mt-0.5 block text-xs leading-relaxed text-gray-400 dark:text-gray-500">{description}</span>
@@ -1245,9 +1245,9 @@ function PromptSquareEditModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain bg-gray-50/80 p-4 dark:bg-black/20 sm:p-6">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-            <section className="space-y-4 rounded-2xl border border-gray-200/70 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03] sm:p-5">
+        <div className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain bg-gray-50/80 p-4 dark:bg-black/20 sm:p-6">
+          <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <section className="min-w-0 space-y-4 rounded-2xl border border-gray-200/70 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03] sm:p-5">
               <label className="block">
                 <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">标题</span>
                 <input
@@ -1268,7 +1268,7 @@ function PromptSquareEditModal({
                 />
               </label>
 
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid min-w-0 gap-4 sm:grid-cols-2">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">类型</span>
                   <Select
@@ -1301,7 +1301,7 @@ function PromptSquareEditModal({
               </label>
             </section>
 
-            <aside className="space-y-4">
+            <aside className="min-w-0 space-y-4">
               <PromptSquareImageUploadSection
                 title="效果图"
                 description="用于广场卡片和详情预览"
@@ -1324,8 +1324,8 @@ function PromptSquareEditModal({
                 onRemoveImage={(id) => removePromptSquareImage('referenceImages', id)}
               />
 
-              <section className="space-y-4 rounded-2xl border border-gray-200/70 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03]">
-                <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+              <section className="min-w-0 space-y-4 rounded-2xl border border-gray-200/70 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03]">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-3 lg:grid-cols-1">
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">质量</span>
                     <Select
