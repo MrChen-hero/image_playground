@@ -673,7 +673,7 @@ export function getPersistedState(state: AppState) {
   return {
     settings,
     params: state.params,
-    ...(settings.persistInputOnRestart && (state.appMode === 'gallery' || galleryInputDraft)
+    ...(settings.persistInputOnRestart && (state.appMode === 'gallery' || state.appMode === 'square' || galleryInputDraft)
       ? {
           prompt: galleryInputDraft?.prompt ?? '',
           inputImages: galleryInputDraft?.inputImages.map((img) => ({ id: img.id, dataUrl: '' })) ?? [],
@@ -724,7 +724,7 @@ function mergePersistedState(persistedState: unknown, currentState: AppState): A
     typeof persisted.activeAgentConversationId === 'string' && (!hasPersistedAgentConversations || agentConversations.some((conversation) => conversation.id === persisted.activeAgentConversationId))
       ? persisted.activeAgentConversationId
       : agentConversations[0]?.id ?? null
-  const appMode = persisted.appMode === 'agent' ? 'agent' : 'gallery'
+  const appMode: AppMode = persisted.appMode === 'agent' || persisted.appMode === 'square' ? persisted.appMode : 'gallery'
   const galleryInputDraft = settings.persistInputOnRestart
     ? normalizeAgentInputDraft(persisted.galleryInputDraft ?? {
         prompt: persisted.prompt,
@@ -1093,7 +1093,7 @@ function saveActiveAgentInputDrafts(state: Pick<AppState, 'appMode' | 'activeAge
 }
 
 function saveGalleryInputDraft(state: Pick<AppState, 'appMode' | 'galleryInputDraft' | 'prompt' | 'inputImages' | 'maskDraft' | 'maskEditorImageId'>) {
-  if (state.appMode !== 'gallery') return state.galleryInputDraft
+  if (state.appMode !== 'gallery' && state.appMode !== 'square') return state.galleryInputDraft
   const draft = getCurrentAgentInputDraft(state)
   return isEmptyAgentInputDraft(draft) ? null : copyAgentInputDraft(draft)
 }
@@ -1127,7 +1127,7 @@ function syncActiveInputDraft<T extends Partial<AgentInputDraft>>(
     maskDraft: patch.maskDraft !== undefined ? patch.maskDraft : state.maskDraft,
     maskEditorImageId: patch.maskEditorImageId !== undefined ? patch.maskEditorImageId : state.maskEditorImageId,
   }
-  if (state.appMode === 'gallery') {
+  if (state.appMode === 'gallery' || state.appMode === 'square') {
     return {
       ...patch,
       galleryInputDraft: isEmptyAgentInputDraft(draft) ? null : copyAgentInputDraft(draft),
@@ -1160,7 +1160,7 @@ export const useStore = create<AppState>()(
       // Mode
       appMode: 'gallery',
       setAppMode: (appMode) => {
-        if (appMode === 'gallery') {
+        if (appMode === 'gallery' || appMode === 'square') {
           const state = get()
           const agentInputDrafts = saveActiveAgentInputDrafts(state)
           const galleryInputDraft = saveGalleryInputDraft(state)
