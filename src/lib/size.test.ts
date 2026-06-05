@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { calculateImageSize } from './size'
+import { calculateImageSize, IMAGE_RATIO_OPTIONS } from './size'
 
 describe('calculateImageSize', () => {
+  it('exports the same preset ratios used by the picker UI', () => {
+    expect(IMAGE_RATIO_OPTIONS.map((option) => option.value)).toEqual([
+      '1:1',
+      '3:2',
+      '2:3',
+      '16:9',
+      '9:16',
+      '4:3',
+      '3:4',
+      '21:9',
+    ])
+  })
+
   it('uses common 16:9 display resolutions for the built-in tiers', () => {
     expect(calculateImageSize('1K', '16:9')).toBe('1280x720')
     expect(calculateImageSize('2K', '16:9')).toBe('2560x1440')

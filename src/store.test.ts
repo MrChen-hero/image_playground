@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { strToU8, zipSync } from 'fflate'
 import { DEFAULT_PARAMS } from './types'
 import { createDefaultFalProfile, createDefaultOpenAIProfile, DEFAULT_RESPONSES_MODEL, DEFAULT_SETTINGS, normalizeSettings } from './lib/apiProfiles'
-import type { AgentConversation, ExportData, StoredImage, StoredImageThumbnail, TaskRecord } from './types'
+import type { AgentConversation, ExportData, PromptSquareItem, StoredImage, StoredImageThumbnail, TaskRecord } from './types'
 import { getSelectedImageMentionLabel } from './lib/promptImageMentions'
 vi.mock('./lib/db', () => {
   const tasks = new Map<string, TaskRecord>()
   const images = new Map<string, StoredImage>()
   const thumbnails = new Map<string, StoredImageThumbnail>()
   const agentConversations = new Map<string, AgentConversation>()
+  const promptSquareItems = new Map<string, PromptSquareItem>()
   let imageSeq = 0
 
   return {
@@ -23,6 +24,24 @@ vi.mock('./lib/db', () => {
     },
     clearTasks: async () => {
       tasks.clear()
+    },
+    getAllPromptSquareItems: async () => [...promptSquareItems.values()],
+    putPromptSquareItem: async (item: PromptSquareItem) => {
+      promptSquareItems.set(item.id, item)
+      return item.id
+    },
+    deletePromptSquareItem: async (id: string) => {
+      promptSquareItems.delete(id)
+    },
+    clearPromptSquareItems: async () => {
+      promptSquareItems.clear()
+    },
+    replacePromptSquareItems: async (items: PromptSquareItem[]) => {
+      promptSquareItems.clear()
+      for (const item of items) promptSquareItems.set(item.id, item)
+    },
+    mergePromptSquareItems: async (items: PromptSquareItem[]) => {
+      for (const item of items) promptSquareItems.set(item.id, item)
     },
     getAllAgentConversations: async () => [...agentConversations.values()],
     putAgentConversation: async (conversation: AgentConversation) => {
@@ -495,6 +514,15 @@ describe('agent conversation persistence', () => {
     const serializedMigrated = JSON.stringify(migrated)
     expect(serializedMigrated).not.toContain('legacy-base64')
     expect(serializedMigrated).toContain('image_generation_call')
+  })
+
+  it('preserves square app mode when migrating persisted state', () => {
+    const migrated = migratePersistedState({
+      settings: { ...DEFAULT_SETTINGS },
+      appMode: 'square',
+    }) as { appMode?: string }
+
+    expect(migrated.appMode).toBe('square')
   })
 })
 
@@ -969,6 +997,40 @@ describe('agent draft lifecycle', () => {
     state = useStore.getState()
     expect(state.appMode).toBe('gallery')
     expect(state.prompt).toBe(galleryPrompt)
+    expect(state.inputImages).toEqual([imageB])
+  })
+
+  it('treats square mode as the shared gallery input draft', () => {
+    const squarePrompt = `广场 ${getSelectedImageMentionLabel(0)} 草稿`
+    useStore.setState({
+      appMode: 'square',
+      prompt: squarePrompt,
+      inputImages: [imageB],
+      maskDraft: null,
+      maskEditorImageId: null,
+      galleryInputDraft: null,
+      agentInputDrafts: {
+        'conversation-a': {
+          prompt: draftState.prompt,
+          inputImages: draftState.inputImages,
+          maskDraft: draftState.maskDraft,
+          maskEditorImageId: imageA.id,
+        },
+      },
+    })
+
+    useStore.getState().setAppMode('agent')
+
+    let state = useStore.getState()
+    expect(state.appMode).toBe('agent')
+    expect(state.galleryInputDraft).toMatchObject({ prompt: squarePrompt, inputImages: [imageB] })
+    expect(state.prompt).toBe(draftState.prompt)
+
+    useStore.getState().setAppMode('square')
+
+    state = useStore.getState()
+    expect(state.appMode).toBe('square')
+    expect(state.prompt).toBe(squarePrompt)
     expect(state.inputImages).toEqual([imageB])
   })
 

@@ -1,7 +1,7 @@
 // ===== 设置 =====
 
 export type ApiMode = 'images' | 'responses'
-export type AppMode = 'gallery' | 'agent'
+export type AppMode = 'square' | 'gallery' | 'agent'
 export type ReferenceImageEditAction = 'ask' | 'replace-reference' | 'add-mask'
 export const ZIP_DOWNLOAD_ROUTE_VALUES = [
   'task-selection',
@@ -298,6 +298,45 @@ export interface StoredImageThumbnail {
   height?: number
   /** 缩略图生成参数版本 */
   thumbnailVersion?: number
+}
+
+// ===== 提示词广场 =====
+
+export type PromptSquareMediaType = 'image' | 'video' | 'functional'
+
+export interface PromptSquareItem {
+  id: string
+  title: string
+  prompt: string
+  category: string
+  mediaType: PromptSquareMediaType
+  tags: string[]
+  modelHint?: string
+  quality?: TaskParams['quality']
+  aspectRatio?: string
+  effectImages?: InputImage[]
+  referenceImages?: InputImage[]
+  accentColor?: string
+  isFeatured?: boolean
+  isFavorite?: boolean
+  favoriteCollectionIds?: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface PromptSquareFavoriteCollection {
+  id: string
+  name: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface PromptSquareManifest {
+  version: 1
+  exportedAt: number
+  items: PromptSquareItem[]
+  collections: PromptSquareFavoriteCollection[]
+  defaultCollectionId: string | null
 }
 
 // ===== API 请求体 =====
