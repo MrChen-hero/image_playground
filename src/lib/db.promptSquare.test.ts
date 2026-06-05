@@ -10,13 +10,25 @@ import {
 import type { PromptSquareItem } from '../types'
 
 type StoreRecord = Record<string, unknown>
+type MockRequest<T> = {
+  result: T
+  onsuccess: ((event: { target: MockRequest<T> }) => void) | null
+}
+type MockOpenRequest = MockRequest<IDBDatabase> & {
+  onupgradeneeded: ((event: { target: MockOpenRequest }) => void) | null
+}
+type MockTransaction = {
+  oncomplete: ((event: Event) => void) | null
+  onerror: ((event: Event) => void) | null
+  onabort: ((event: Event) => void) | null
+  objectStore: () => IDBObjectStore
+}
 
 const stores = new Map<string, Map<string, StoreRecord>>()
 
 function installIndexedDbMock() {
   const indexedDbMock = {
     open: (_name: string, _version: number) => {
-      const request: Partial<IDBOpenDBRequest> = {}
       const db = {
         objectStoreNames: {
           contains: (storeName: string) => stores.has(storeName),
@@ -25,7 +37,14 @@ function installIndexedDbMock() {
           stores.set(storeName, stores.get(storeName) ?? new Map())
         },
         transaction: (storeName: string, _mode: IDBTransactionMode) => {
-          const tx: Partial<IDBTransaction> = {}
+          const tx: MockTransaction = {
+            oncomplete: null,
+            onerror: null,
+            onabort: null,
+            objectStore: () => {
+              throw new Error('Object store is not initialized')
+            },
+          }
           const store = stores.get(storeName) ?? new Map<string, StoreRecord>()
           stores.set(storeName, store)
 
@@ -34,9 +53,9 @@ function installIndexedDbMock() {
           }
 
           const createRequest = <T,>(result: T) => {
-            const storeRequest: Partial<IDBRequest<T>> = { result }
-            setTimeout(() => storeRequest.onsuccess?.(new Event('success')), 0)
-            return storeRequest as IDBRequest<T>
+            const storeRequest: MockRequest<T> = { result, onsuccess: null }
+            setTimeout(() => storeRequest.onsuccess?.({ target: storeRequest }), 0)
+            return storeRequest as unknown as IDBRequest<T>
           }
 
           tx.objectStore = () => ({
@@ -58,22 +77,26 @@ function installIndexedDbMock() {
               return createRequest(undefined)
             },
           } as unknown as IDBObjectStore)
-          return tx as IDBTransaction
+          return tx as unknown as IDBTransaction
         },
       } as IDBDatabase
 
-      request.result = db
+      const request: MockOpenRequest = {
+        result: db,
+        onsuccess: null,
+        onupgradeneeded: null,
+      }
       setTimeout(() => {
-        request.onupgradeneeded?.({ target: request } as IDBVersionChangeEvent)
-        request.onsuccess?.({ target: request } as Event)
+        request.onupgradeneeded?.({ target: request })
+        request.onsuccess?.({ target: request })
       }, 0)
-      return request as IDBOpenDBRequest
+      return request as unknown as IDBOpenDBRequest
     },
-  } as IDBFactory
+  }
 
   Object.defineProperty(globalThis, 'indexedDB', {
     configurable: true,
-    value: indexedDbMock,
+    value: indexedDbMock as unknown as IDBFactory,
   })
 }
 

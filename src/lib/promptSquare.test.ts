@@ -8,6 +8,7 @@ import {
   sortPromptSquareItems,
   validatePromptSquareDraft,
 } from './promptSquare'
+import { PROMPT_SQUARE_TEST_ITEMS } from './promptSquareData'
 import type { PromptSquareItem } from '../types'
 
 describe('prompt square normalization', () => {
@@ -108,5 +109,11 @@ describe('prompt square manifest', () => {
   it('rejects invalid manifest structure', () => {
     expect(parsePromptSquareManifest({ version: 2, items: [] }).ok).toBe(false)
     expect(parsePromptSquareManifest({ version: 1, items: [{ title: '', prompt: '' }] }).ok).toBe(false)
+  })
+})
+
+describe('prompt square fixtures', () => {
+  it('keeps test fixtures out of runtime default loading', () => {
+    expect(PROMPT_SQUARE_TEST_ITEMS.map((item) => item.mediaType).sort()).toEqual(['functional', 'image', 'video'])
   })
 })
