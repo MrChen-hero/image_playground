@@ -813,7 +813,7 @@ export default function PromptSquare() {
         )}
       </div>
 
-      <div data-no-drag-select className="fixed bottom-[calc(var(--input-bar-clearance,12rem)+0.75rem)] left-1/2 z-30 flex w-full max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center justify-center gap-2 px-3">
+      <div data-no-drag-select className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-1/2 z-30 flex w-full max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center justify-center gap-2 px-3">
         <nav className="flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full border border-gray-200/70 bg-white/90 p-1 text-xs font-medium text-gray-600 shadow-[0_8px_30px_rgb(0,0,0,0.10)] backdrop-blur-xl hide-scrollbar dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-300">
           {MEDIA_FILTERS.map((item) => (
             <MediaFilterButton
