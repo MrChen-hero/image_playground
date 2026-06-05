@@ -1,11 +1,23 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCloseOnEscape } from '../hooks/useCloseOnEscape'
 import { usePreventBackgroundScroll } from '../hooks/usePreventBackgroundScroll'
 import { copyTextToClipboard, getClipboardFailureMessage } from '../lib/clipboard'
-import { PROMPT_SQUARE_MEDIA_TYPES, sortPromptSquareItems } from '../lib/promptSquare'
+import {
+  deletePromptSquareItem,
+  getAllPromptSquareItems,
+  putPromptSquareItem,
+} from '../lib/db'
+import {
+  normalizePromptSquareDraft,
+  PROMPT_SQUARE_MEDIA_TYPES,
+  promptSquareItemToDraft,
+  sortPromptSquareItems,
+  validatePromptSquareDraft,
+  type PromptSquareDraft,
+} from '../lib/promptSquare'
 import { useStore } from '../store'
 import type { PromptSquareItem, PromptSquareMediaType } from '../types'
-import { CloseIcon, CodeIcon, CopyIcon, FavoriteIcon, PhotoIcon, WrenchIcon } from './icons'
+import { CloseIcon, CodeIcon, CopyIcon, EditIcon, FavoriteIcon, PhotoIcon, PlusIcon, TrashIcon, WrenchIcon } from './icons'
 import Select from './Select'
 
 type MediaFilter = PromptSquareMediaType
@@ -185,6 +197,8 @@ function PromptDetailModal({
   onToggleFavorite,
   onCopy,
   onUse,
+  onEdit,
+  onDelete,
 }: {
   item: PromptSquareItem | null
   favorite: boolean
@@ -192,6 +206,8 @@ function PromptDetailModal({
   onToggleFavorite: () => void
   onCopy: () => void
   onUse: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
   const modalRef = useRef<HTMLDivElement>(null)
   useCloseOnEscape(Boolean(item), onClose)
@@ -326,7 +342,191 @@ function PromptDetailModal({
             >
               <FavoriteIcon filled={favorite} className="h-5 w-5" />
             </button>
+            <button
+              type="button"
+              onClick={onEdit}
+              className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-gray-50 px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08] sm:flex-1"
+            >
+              <EditIcon className="h-4 w-4" />
+              编辑
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="col-span-2 flex items-center justify-center gap-1.5 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition hover:bg-red-100 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20 sm:flex-1"
+            >
+              <TrashIcon className="h-4 w-4" />
+              删除
+            </button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PromptSquareEditModal({
+  draft,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  draft: PromptSquareDraft | null
+  onChange: (draft: PromptSquareDraft) => void
+  onClose: () => void
+  onSave: () => void
+}) {
+  const modalRef = useRef<HTMLDivElement>(null)
+  useCloseOnEscape(Boolean(draft), onClose)
+  usePreventBackgroundScroll(Boolean(draft), modalRef)
+
+  if (!draft) return null
+
+  const updateDraft = (patch: Partial<PromptSquareDraft>) => onChange({ ...draft, ...patch })
+
+  return (
+    <div
+      data-no-drag-select
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-md animate-overlay-in dark:bg-black/40" />
+      <div
+        ref={modalRef}
+        className="relative z-10 flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-white/50 bg-white/95 shadow-[0_8px_40px_rgb(0,0,0,0.12)] ring-1 ring-black/5 backdrop-blur-xl animate-modal-in dark:border-white/[0.08] dark:bg-gray-900/95 dark:shadow-[0_8px_40px_rgb(0,0,0,0.4)] dark:ring-white/10"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4 dark:border-white/[0.08]">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">{draft.id ? '编辑提示词' : '新增提示词'}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1 text-gray-400 transition hover:bg-gray-100 dark:hover:bg-white/[0.06]"
+            aria-label="关闭"
+          >
+            <CloseIcon className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-5">
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">标题</span>
+            <input
+              value={draft.title ?? ''}
+              onChange={(event) => updateDraft({ title: event.target.value })}
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
+              autoFocus
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">提示词</span>
+            <textarea
+              value={draft.prompt ?? ''}
+              onChange={(event) => updateDraft({ prompt: event.target.value })}
+              rows={7}
+              className="w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-gray-900 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">类型</span>
+              <Select
+                value={draft.mediaType ?? DEFAULT_MEDIA_FILTER}
+                onChange={(value) => updateDraft({ mediaType: value as PromptSquareMediaType })}
+                options={PROMPT_SQUARE_MEDIA_TYPES}
+                className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm transition hover:bg-gray-50 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-950 dark:hover:bg-white/[0.06]"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">分类</span>
+              <input
+                value={draft.category ?? ''}
+                onChange={(event) => updateDraft({ category: event.target.value })}
+                placeholder="未分类"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
+              />
+            </label>
+          </div>
+
+          <label className="block">
+            <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">标签</span>
+            <input
+              value={draft.tagsText ?? ''}
+              onChange={(event) => updateDraft({ tagsText: event.target.value })}
+              placeholder="商业, 棚拍, 极简"
+              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
+            />
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">模型</span>
+              <input
+                value={draft.modelHint ?? ''}
+                onChange={(event) => updateDraft({ modelHint: event.target.value })}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">比例</span>
+              <input
+                value={draft.aspectRatio ?? ''}
+                onChange={(event) => updateDraft({ aspectRatio: event.target.value })}
+                placeholder="16:9"
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">强调色</span>
+              <div className="flex gap-2">
+                <input
+                  value={draft.accentColor ?? ''}
+                  onChange={(event) => updateDraft({ accentColor: event.target.value })}
+                  placeholder="#2563eb"
+                  className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-white/[0.08] dark:bg-gray-950 dark:text-gray-100"
+                />
+                <input
+                  type="color"
+                  value={draft.accentColor || '#2563eb'}
+                  onChange={(event) => updateDraft({ accentColor: event.target.value })}
+                  className="h-10 w-10 shrink-0 rounded-xl border border-gray-200 bg-white p-1 dark:border-white/[0.08] dark:bg-gray-950"
+                  aria-label="选择强调色"
+                />
+              </div>
+            </label>
+          </div>
+
+          <label className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-300">
+            <input
+              type="checkbox"
+              checked={Boolean(draft.isFeatured)}
+              onChange={(event) => updateDraft({ isFeatured: event.target.checked })}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            置顶显示
+          </label>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-white/[0.08]">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-gray-50 px-4 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500"
+          >
+            保存
+          </button>
         </div>
       </div>
     </div>
@@ -337,13 +537,31 @@ export default function PromptSquare() {
   const setPrompt = useStore((s) => s.setPrompt)
   const setAppMode = useStore((s) => s.setAppMode)
   const showToast = useStore((s) => s.showToast)
+  const setConfirmDialog = useStore((s) => s.setConfirmDialog)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState(ALL_CATEGORIES)
   const [mediaType, setMediaType] = useState<MediaFilter>(DEFAULT_MEDIA_FILTER)
   const [favoriteOnly, setFavoriteOnly] = useState(false)
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([])
   const [detailItemId, setDetailItemId] = useState<string | null>(null)
-  const [items] = useState<PromptSquareItem[]>([])
+  const [items, setItems] = useState<PromptSquareItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editingItemId, setEditingItemId] = useState<string | null>(null)
+  const [draft, setDraft] = useState<PromptSquareDraft | null>(null)
+
+  const reloadItems = useCallback(async () => {
+    setLoading(true)
+    try {
+      setItems(await getAllPromptSquareItems())
+    } catch {
+      showToast('加载提示词库失败', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [showToast])
+
+  useEffect(() => {
+    void reloadItems()
+  }, [reloadItems])
 
   const categories = useMemo(() => Array.from(new Set(items.map((item) => item.category))).sort(), [items])
   const categoryOptions = useMemo(() => [
@@ -355,21 +573,92 @@ export default function PromptSquare() {
     return sortPromptSquareItems(items.filter((item) => {
       if (item.mediaType !== mediaType) return false
       if (category !== ALL_CATEGORIES && item.category !== category) return false
-      if (favoriteOnly && !favoriteIds.includes(item.id)) return false
+      if (favoriteOnly && !item.isFavorite) return false
       if (!normalizedQuery) return true
       return getSearchText(item).includes(normalizedQuery)
     }))
-  }, [category, favoriteIds, favoriteOnly, items, mediaType, query])
+  }, [category, favoriteOnly, items, mediaType, query])
   const detailItem = useMemo(
     () => items.find((item) => item.id === detailItemId) ?? null,
     [detailItemId, items],
   )
 
-  const toggleFavorite = (itemId: string) => {
-    setFavoriteIds((current) => current.includes(itemId)
-      ? current.filter((id) => id !== itemId)
-      : [...current, itemId],
-    )
+  const updateItem = async (item: PromptSquareItem) => {
+    try {
+      await putPromptSquareItem(item)
+      setItems((current) => current.map((entry) => entry.id === item.id ? item : entry))
+    } catch {
+      showToast('保存提示词失败', 'error')
+    }
+  }
+
+  const toggleFavorite = (item: PromptSquareItem) => {
+    void updateItem({ ...item, isFavorite: !item.isFavorite, updatedAt: Date.now() })
+  }
+
+  const openCreateModal = () => {
+    setEditingItemId(null)
+    setDraft({
+      title: '',
+      prompt: '',
+      mediaType,
+      category: '',
+      tagsText: '',
+      modelHint: '',
+      aspectRatio: mediaType === 'functional' ? 'Tool' : '',
+      accentColor: '',
+      isFeatured: false,
+    })
+  }
+
+  const openEditModal = (item: PromptSquareItem) => {
+    setEditingItemId(item.id)
+    setDraft(promptSquareItemToDraft(item))
+  }
+
+  const saveDraft = async () => {
+    if (!draft) return
+    const errors = validatePromptSquareDraft(draft)
+    if (errors.length) {
+      showToast(errors[0], 'error')
+      return
+    }
+    const nextItem = normalizePromptSquareDraft(draft)
+    try {
+      await putPromptSquareItem(nextItem)
+      setItems((current) => {
+        const exists = current.some((item) => item.id === nextItem.id)
+        return exists
+          ? current.map((item) => item.id === nextItem.id ? nextItem : item)
+          : [...current, nextItem]
+      })
+      setDraft(null)
+      setEditingItemId(null)
+      showToast(editingItemId ? '提示词已更新' : '提示词已新增', 'success')
+    } catch {
+      showToast('保存提示词失败', 'error')
+    }
+  }
+
+  const requestDeleteItem = (item: PromptSquareItem) => {
+    setConfirmDialog({
+      title: '删除提示词',
+      message: '确定要删除这个提示词模板吗？此操作不会影响画廊任务。',
+      confirmText: '删除',
+      cancelText: '取消',
+      action: async () => {
+        try {
+          await deletePromptSquareItem(item.id)
+          setItems((current) => current.filter((entry) => entry.id !== item.id))
+          setDetailItemId(null)
+          setDraft((current) => current?.id === item.id ? null : current)
+          setEditingItemId((current) => current === item.id ? null : current)
+          showToast('提示词已删除', 'success')
+        } catch {
+          showToast('删除提示词失败', 'error')
+        }
+      },
+    })
   }
 
   const copyPrompt = async (item: PromptSquareItem) => {
@@ -439,14 +728,16 @@ export default function PromptSquare() {
           <span>共 {visibleItems.length} 个模板 · {mediaLabel(mediaType)}{favoriteOnly ? ' · 本地标记' : ''}</span>
         </div>
 
-        {visibleItems.length ? (
+        {loading ? (
+          <section className="py-16 text-center text-sm text-gray-400 dark:text-gray-500">正在加载提示词库...</section>
+        ) : visibleItems.length ? (
           <section className="grid grid-cols-1 gap-4 pb-10 sm:grid-cols-2 lg:grid-cols-3">
             {visibleItems.map((item) => (
               <PromptCard
                 key={item.id}
                 item={item}
-                favorite={favoriteIds.includes(item.id)}
-                onToggleFavorite={() => toggleFavorite(item.id)}
+                favorite={Boolean(item.isFavorite)}
+                onToggleFavorite={() => toggleFavorite(item)}
                 onCopy={() => void copyPrompt(item)}
                 onUse={() => usePrompt(item)}
                 onOpen={() => setDetailItemId(item.id)}
@@ -456,13 +747,13 @@ export default function PromptSquare() {
         ) : (
           <section className="rounded-2xl border border-dashed border-gray-200 bg-white/60 py-16 text-center text-gray-400 dark:border-white/[0.08] dark:bg-white/[0.02] dark:text-gray-500">
             <PhotoIcon className="mx-auto mb-3 h-10 w-10 opacity-60" />
-            <p className="text-sm">没有找到匹配的提示词模板</p>
+            <p className="text-sm">{items.length ? '没有找到匹配的提示词模板' : '暂无提示词模板，点击底部 + 新增'}</p>
           </section>
         )}
       </div>
 
-      <div data-no-drag-select className="fixed bottom-[calc(var(--input-bar-clearance,12rem)+0.75rem)] left-1/2 z-30 w-full max-w-[calc(100vw-1rem)] -translate-x-1/2 px-3">
-        <nav className="mx-auto flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full border border-gray-200/70 bg-white/90 p-1 text-xs font-medium text-gray-600 shadow-[0_8px_30px_rgb(0,0,0,0.10)] backdrop-blur-xl hide-scrollbar dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-300">
+      <div data-no-drag-select className="fixed bottom-[calc(var(--input-bar-clearance,12rem)+0.75rem)] left-1/2 z-30 flex w-full max-w-[calc(100vw-1rem)] -translate-x-1/2 items-center justify-center gap-2 px-3">
+        <nav className="flex w-fit max-w-full items-center gap-1 overflow-x-auto rounded-full border border-gray-200/70 bg-white/90 p-1 text-xs font-medium text-gray-600 shadow-[0_8px_30px_rgb(0,0,0,0.10)] backdrop-blur-xl hide-scrollbar dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-300">
           {MEDIA_FILTERS.map((item) => (
             <MediaFilterButton
               key={item.value}
@@ -472,14 +763,23 @@ export default function PromptSquare() {
             />
           ))}
         </nav>
+        <button
+          type="button"
+          onClick={openCreateModal}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-gray-200/70 bg-white/90 text-gray-700 shadow-[0_8px_30px_rgb(0,0,0,0.10)] backdrop-blur-xl transition hover:bg-gray-100 dark:border-white/[0.08] dark:bg-gray-800/90 dark:text-gray-200 dark:hover:bg-white/[0.08]"
+          aria-label="新增提示词"
+          title="新增提示词"
+        >
+          <PlusIcon className="h-5 w-5" />
+        </button>
       </div>
 
       <PromptDetailModal
         item={detailItem}
-        favorite={detailItem ? favoriteIds.includes(detailItem.id) : false}
+        favorite={detailItem ? Boolean(detailItem.isFavorite) : false}
         onClose={() => setDetailItemId(null)}
         onToggleFavorite={() => {
-          if (detailItem) toggleFavorite(detailItem.id)
+          if (detailItem) toggleFavorite(detailItem)
         }}
         onCopy={() => {
           if (detailItem) void copyPrompt(detailItem)
@@ -487,6 +787,22 @@ export default function PromptSquare() {
         onUse={() => {
           if (detailItem) usePrompt(detailItem)
         }}
+        onEdit={() => {
+          if (detailItem) openEditModal(detailItem)
+        }}
+        onDelete={() => {
+          if (detailItem) requestDeleteItem(detailItem)
+        }}
+      />
+
+      <PromptSquareEditModal
+        draft={draft}
+        onChange={setDraft}
+        onClose={() => {
+          setDraft(null)
+          setEditingItemId(null)
+        }}
+        onSave={() => void saveDraft()}
       />
     </main>
   )

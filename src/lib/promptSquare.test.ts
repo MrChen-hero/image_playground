@@ -5,6 +5,7 @@ import {
   normalizePromptSquareDraft,
   parsePromptSquareManifest,
   parsePromptSquareTags,
+  promptSquareItemToDraft,
   sortPromptSquareItems,
   validatePromptSquareDraft,
 } from './promptSquare'
@@ -115,5 +116,28 @@ describe('prompt square manifest', () => {
 describe('prompt square fixtures', () => {
   it('keeps test fixtures out of runtime default loading', () => {
     expect(PROMPT_SQUARE_TEST_ITEMS.map((item) => item.mediaType).sort()).toEqual(['functional', 'image', 'video'])
+  })
+})
+
+describe('prompt square drafts', () => {
+  it('converts an item to edit draft text', () => {
+    expect(promptSquareItemToDraft({
+      id: 'a',
+      title: 'Title',
+      prompt: 'Prompt',
+      category: 'Cat',
+      mediaType: 'image',
+      tags: ['A', 'B'],
+      createdAt: 1,
+      updatedAt: 2,
+    })).toMatchObject({
+      id: 'a',
+      title: 'Title',
+      prompt: 'Prompt',
+      category: 'Cat',
+      mediaType: 'image',
+      tagsText: 'A, B',
+      createdAt: 1,
+    })
   })
 })

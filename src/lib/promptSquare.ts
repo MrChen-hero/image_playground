@@ -71,6 +71,23 @@ export function normalizePromptSquareDraft(draft: PromptSquareDraft, now = Date.
   }
 }
 
+export function promptSquareItemToDraft(item: PromptSquareItem): PromptSquareDraft {
+  return {
+    id: item.id,
+    title: item.title,
+    prompt: item.prompt,
+    category: item.category,
+    mediaType: item.mediaType,
+    tagsText: item.tags.join(', '),
+    modelHint: item.modelHint ?? '',
+    aspectRatio: item.aspectRatio ?? '',
+    accentColor: item.accentColor ?? '',
+    isFeatured: Boolean(item.isFeatured),
+    isFavorite: Boolean(item.isFavorite),
+    createdAt: item.createdAt,
+  }
+}
+
 export function sortPromptSquareItems(items: PromptSquareItem[]) {
   return [...items].sort((a, b) => {
     if (Boolean(a.isFeatured) !== Boolean(b.isFeatured)) return a.isFeatured ? -1 : 1
