@@ -1325,7 +1325,7 @@ function PromptSquareEditModal({
               />
 
               <section className="min-w-0 space-y-4 rounded-2xl border border-gray-200/70 bg-white p-4 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.03]">
-                <div className="grid min-w-0 gap-4 sm:grid-cols-3 lg:grid-cols-1">
+                <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-1">
                   <label className="block">
                     <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">质量</span>
                     <Select
@@ -1347,7 +1347,7 @@ function PromptSquareEditModal({
                     />
                   </label>
 
-                  <label className="block">
+                  <label className="block sm:col-span-2 lg:col-span-1">
                     <span className="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">强调色</span>
                     <div className="flex gap-2">
                       <input
