@@ -1301,7 +1301,7 @@ function PromptSquareEditModal({
               </label>
             </section>
 
-            <aside className="min-w-0 space-y-4">
+            <aside className="contents lg:block lg:min-w-0 lg:space-y-4">
               <PromptSquareImageUploadSection
                 title="效果图"
                 description="用于广场卡片和详情预览"
