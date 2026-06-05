@@ -1,3 +1,5 @@
+import { readRuntimeEnv } from './runtimeEnv'
+
 export interface DevProxyConfig {
   enabled: boolean
   prefix: string
@@ -5,6 +7,8 @@ export interface DevProxyConfig {
   changeOrigin: boolean
   secure: boolean
 }
+
+const DEFAULT_PROXY_PREFIX = '/api-proxy'
 
 export function normalizeBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.trim()
@@ -37,9 +41,9 @@ export function normalizeDevProxyConfig(input: unknown): DevProxyConfig | null {
   const target = normalizeBaseUrl(typeof record.target === 'string' ? record.target : '')
   if (!target) return null
 
-  const rawPrefix = typeof record.prefix === 'string' ? record.prefix : '/api-proxy'
+  const rawPrefix = typeof record.prefix === 'string' ? record.prefix : DEFAULT_PROXY_PREFIX
   const trimmedPrefix = rawPrefix.trim().replace(/^\/+/, '').replace(/\/+$/, '')
-  const prefix = trimmedPrefix ? `/${trimmedPrefix}` : '/api-proxy'
+  const prefix = trimmedPrefix ? `/${trimmedPrefix}` : DEFAULT_PROXY_PREFIX
 
   return {
     enabled: Boolean(record.enabled),
@@ -50,20 +54,22 @@ export function normalizeDevProxyConfig(input: unknown): DevProxyConfig | null {
   }
 }
 
-export function buildApiUrl(baseUrl: string, path: string, proxyConfig?: DevProxyConfig | null): string {
+export function buildApiUrl(
+  baseUrl: string,
+  path: string,
+  proxyConfig?: DevProxyConfig | null,
+  useApiProxy = false,
+): string {
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl)
   const endpointPath = path.replace(/^\/+/, '')
+
+  if (useApiProxy) {
+    return `${proxyConfig?.prefix ?? DEFAULT_PROXY_PREFIX}/${endpointPath}`
+  }
+
   const apiPath = normalizedBaseUrl.endsWith('/v1')
     ? endpointPath
     : ['v1', endpointPath].join('/')
-  const useProxy =
-    Boolean(proxyConfig?.enabled) &&
-    Boolean(proxyConfig?.target) &&
-    normalizedBaseUrl === proxyConfig?.target
-
-  if (useProxy) {
-    return `${proxyConfig!.prefix}/${apiPath}`
-  }
 
   return normalizedBaseUrl ? `${normalizedBaseUrl}/${apiPath}` : `/${apiPath}`
 }
@@ -78,4 +84,16 @@ export function readClientDevProxyConfig(): DevProxyConfig | null {
     typeof __DEV_PROXY_CONFIG__ === 'undefined' ? null : __DEV_PROXY_CONFIG__,
     import.meta.env.DEV,
   )
+}
+
+export function isApiProxyAvailable(proxyConfig: DevProxyConfig | null = readClientDevProxyConfig()): boolean {
+  return readRuntimeEnv(import.meta.env.VITE_API_PROXY_AVAILABLE) === 'true' || Boolean(proxyConfig?.enabled)
+}
+
+export function isApiProxyLocked(proxyConfig: DevProxyConfig | null = readClientDevProxyConfig()): boolean {
+  return readRuntimeEnv(import.meta.env.VITE_API_PROXY_LOCKED) === 'true' && isApiProxyAvailable(proxyConfig)
+}
+
+export function shouldUseApiProxy(apiProxy: boolean, proxyConfig: DevProxyConfig | null = readClientDevProxyConfig()): boolean {
+  return isApiProxyAvailable(proxyConfig) && (apiProxy || isApiProxyLocked(proxyConfig))
 }
