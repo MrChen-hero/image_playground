@@ -845,6 +845,8 @@ function PromptCard({
   onOpenImage,
   onToggleFavorite,
   onCopy,
+  onEdit,
+  onDelete,
   onUse,
   onOpen,
 }: {
@@ -855,6 +857,8 @@ function PromptCard({
   onOpenImage: (images: InputImage[], index: number) => void
   onToggleFavorite: () => void
   onCopy: () => void
+  onEdit: () => void
+  onDelete: () => void
   onUse: () => void
   onOpen: () => void
 }) {
@@ -932,6 +936,24 @@ function PromptCard({
                 title={favorite ? '编辑收藏夹' : '收藏模板'}
               >
                 <FavoriteIcon filled={favorite} className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="rounded-md p-1.5 text-gray-400 transition hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-950/30"
+                aria-label="编辑模板"
+                title="编辑模板"
+              >
+                <EditIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="rounded-md p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-950/30"
+                aria-label="删除模板"
+                title="删除模板"
+              >
+                <TrashIcon className="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -1918,6 +1940,8 @@ export default function PromptSquare() {
                 onOpenImage={(images, index) => openEffectImageLightbox(item.id, images, index)}
                 onToggleFavorite={() => setFavoritePickerItemId(item.id)}
                 onCopy={() => void copyPrompt(item)}
+                onEdit={() => openEditModal(item)}
+                onDelete={() => requestDeleteItem(item)}
                 onUse={() => usePrompt(item)}
                 onOpen={() => setDetailItemId(item.id)}
               />
